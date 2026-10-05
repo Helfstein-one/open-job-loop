@@ -1,0 +1,126 @@
+--- a/src/db/repository.py
++++ b/src/db/repository.py
+@@ -10,7 +10,7 @@
+ from datetime import datetime, timezone
+ import hashlib
+ import json
+-from typing import Any, AsyncIterator, Dict, List, Optional
++from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+ 
+ from src.db.database import DatabaseManager
+ from src.models.schemas import JobPosting, JobStatus, MatchEvaluation, Recommendation
+@@ -26,16 +26,20 @@
+     Normalizes whitespace and casing for robust deduplication.
++    Hardened against delimiter collisions and positional ambiguities using
++    canonical sorted JSON serialization.
+ 
+     Args:
+         raw_description: Original job description text.
+         title: Optional job title.
+         company: Optional hiring organization.
+ 
+     Returns:
+         64-character lowercase SHA256 hex digest.
+     """
+-    parts = []
+-    if company:
+-        parts.append(company.strip().lower())
+-    if title:
+-        parts.append(title.strip().lower())
+-    normalized_desc = " ".join(raw_description.strip().split())
+-    parts.append(normalized_desc)
+-
+-    payload = "::".join(parts)
++    norm_company = " ".join(company.strip().split()).lower() if company else ""
++    norm_title = " ".join(title.strip().split()).lower() if title else ""
++    norm_desc = " ".join(raw_description.strip().split()) if raw_description else ""
++
++    payload = json.dumps(
++        {
++            "c": norm_company,
++            "d": norm_desc,
++            "t": norm_title,
++        },
++        sort_keys=True,
++        separators=(",", ":"),
++    )
+     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+@@ -311,35 +315,44 @@
+     async def iterate_jobs(
+         self,
+         status: Optional[JobStatus] = None,
+         batch_size: int = 50
+     ) -> AsyncIterator[JobPosting]:
+         """
+         Stream job postings from DuckDB with bounded memory consumption.
+-        Guarantees O(1) RAM footprint by paging fixed chunks.
++        Guarantees O(1) RAM footprint by paging fixed chunks using keyset pagination
++        on (created_at, id). Mutating job statuses in-flight during iteration
++        will never skip rows or re-read previously yielded rows.
+ 
+         Args:
+             status: Optional filter by JobStatus.
+             batch_size: Number of records to load per pagination chunk.
+ 
+         Yields:
+             JobPosting entities one by one.
+         """
+-        offset = 0
++        if batch_size < 1:
++            batch_size = 50
++
++        last_created_at: Optional[Any] = None
++        last_id: Optional[str] = None
++
+         while True:
+             params: List[Any] = []
++            where_clauses: List[str] = []
++
+             if status is not None:
+                 status_val = status.value if isinstance(status, JobStatus) else str(status)
+-                query = """
+-                SELECT * FROM job_postings
+-                WHERE status = ?
+-                ORDER BY created_at ASC, id ASC
+-                LIMIT ? OFFSET ?;
+-                """
+-                params = [status_val, batch_size, offset]
+-            else:
+-                query = """
+-                SELECT * FROM job_postings
+-                ORDER BY created_at ASC, id ASC
+-                LIMIT ? OFFSET ?;
+-                """
+-                params = [batch_size, offset]
++                where_clauses.append("status = ?")
++                params.append(status_val)
++
++            if last_created_at is not None and last_id is not None:
++                where_clauses.append("(created_at > ? OR (created_at = ? AND id > ?))")
++                params.extend([last_created_at, last_created_at, last_id])
++
++            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
++            query = f"""
++            SELECT * FROM job_postings
++            {where_sql}
++            ORDER BY created_at ASC, id ASC
++            LIMIT ?;
++            """
++            params.append(batch_size)
+ 
+             cols, rows = await self._db.aexecute_read(query, params)
+             if not rows:
+                 break
+ 
++            ts_idx = cols.index("created_at")
++            id_idx = cols.index("id")
++            last_created_at = rows[-1][ts_idx]
++            last_id = rows[-1][id_idx]
++
+             for row in rows:
+                 yield self._row_to_job(cols, row)
+ 
+             if len(rows) < batch_size:
+                 break
+-
+-            offset += len(rows)

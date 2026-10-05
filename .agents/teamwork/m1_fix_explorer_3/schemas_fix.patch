@@ -1,0 +1,28 @@
+--- a/src/models/schemas.py
++++ b/src/models/schemas.py
+@@ -10,2 +10,2 @@
+-from typing import Optional, List
+-from pydantic import BaseModel, Field, ConfigDict, model_validator
++from typing import Optional, List, Any
++from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
+@@ -57,8 +57,8 @@
+-    matched_skills: List[str] = Field(
++    matched_skills: Optional[List[str]] = Field(
+         default_factory=list,
+         description="List of required skills possessed by the candidate."
+     )
+-    missing_skills: List[str] = Field(
++    missing_skills: Optional[List[str]] = Field(
+         default_factory=list,
+         description="List of required skills absent from candidate profile."
+     )
+@@ -73,0 +74,8 @@
++    @field_validator("matched_skills", "missing_skills", mode="before")
++    @classmethod
++    def coerce_none_skills(cls, v: Any) -> Any:
++        """
++        Coerces None or null LLM outputs for skill lists into empty lists.
++        """
++        if v is None:
++            return []
++        return v

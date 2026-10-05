@@ -1,0 +1,55 @@
+--- a/tests/test_adversarial_m1.py
++++ b/tests/test_adversarial_m1.py
+@@ -252,7 +252,7 @@
+-    def test_match_evaluation_null_skills_validation_error(self):
++    def test_match_evaluation_null_skills_coerced_to_empty_list(self):
+         """
+-        EMPIRICAL FRAGILITY DEMONSTRATION:
+-        When an LLM returns null for matched_skills or missing_skills,
+-        MatchEvaluation raises ValidationError instead of defaulting to [].
++        VERIFIED RESILIENCE:
++        When an LLM returns null for matched_skills or missing_skills,
++        MatchEvaluation coerces them to empty lists [] instead of raising ValidationError.
+         """
+-        with pytest.raises(ValidationError):
+-            MatchEvaluation.model_validate({
+-                "fit_score": 80,
+-                "recommendation": "SHORTLIST",
+-                "matched_skills": None,
+-                "missing_skills": None,
+-            })
++        eval_obj = MatchEvaluation.model_validate({
++            "fit_score": 80,
++            "recommendation": "SHORTLIST",
++            "matched_skills": None,
++            "missing_skills": None,
++        })
++        assert eval_obj.matched_skills == []
++        assert eval_obj.missing_skills == []
+--- a/tests/test_models.py
++++ b/tests/test_models.py
+@@ -68,2 +68,25 @@
+     assert coerced.fit_score == 75
+ 
++
++def test_match_evaluation_null_skills_coercion():
++    # Direct instantiation with None
++    eval_direct = MatchEvaluation(
++        fit_score=90,
++        recommendation=Recommendation.SHORTLIST,
++        matched_skills=None,
++        missing_skills=None,
++    )
++    assert eval_direct.matched_skills == []
++    assert eval_direct.missing_skills == []
++
++    # Dict validation with None
++    eval_dict = MatchEvaluation.model_validate({
++        "fit_score": 75,
++        "recommendation": "DISCARD",
++        "matched_skills": None,
++        "missing_skills": None,
++    })
++    assert eval_dict.matched_skills == []
++    assert eval_dict.missing_skills == []
++

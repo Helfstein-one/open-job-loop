@@ -1,0 +1,49 @@
+--- a/src/core/truncator.py
++++ b/src/core/truncator.py
+@@ -40,19 +40,19 @@ class TextTruncator:
+     EEO_AND_BOILERPLATE_PATTERNS = [
+         # EEO / Affirmative Action Employer statements
+-        r"(?is)\b(?:we are (?:an? )?equal opportunity employer|equal (?:employment )?opportunity|eeo/aa|affirmative action employer).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:we are (?:an? )?equal opportunity employer|equal (?:employment )?opportunity|eeo/aa|affirmative action employer).*?(?:\n|\Z)",
+         # Standard non-discrimination legal clauses
+-        r"(?is)\b(?:all qualified applicants will receive consideration for employment without regard to|qualified applicants will be considered without regard to).*?(?:\n\n|\Z)",
+-        r"(?is)\b(?:we (?:do not discriminate|prohibit discrimination) (?:on the basis of|based on)).*?(?:\n\n|\Z)",
+-        r"(?is)\b(?:we celebrate diversity and are committed to creating an inclusive).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:all qualified applicants will receive consideration for employment without regard to|qualified applicants will be considered without regard to).*?(?:\n|\Z)",
++        r"(?i)\b(?:we (?:do not discriminate|prohibit discrimination) (?:on the basis of|based on)).*?(?:\n|\Z)",
++        r"(?i)\b(?:we celebrate diversity and are committed to creating an inclusive).*?(?:\n|\Z)",
+         # Municipal / State Fair Chance Ordinances (SF, CA, LA, NYC)
+-        r"(?is)\b(?:pursuant to the (?:san francisco|california|los angeles|new york) fair chance|fair chance ordinance|fair chance initiative).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:pursuant to the (?:san francisco|california|los angeles|new york) fair chance|fair chance ordinance|fair chance initiative).*?(?:\n|\Z)",
+         # Disability & ADA accommodation boilerplate
+-        r"(?is)\b(?:if you (?:require|need) (?:an? )?reasonable accommodation|accommodations? for (?:individuals|persons) with disabilities|americans with disabilities act).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:if you (?:require|need) (?:an? )?reasonable accommodation|accommodations? for (?:individuals|persons) with disabilities|americans with disabilities act).*?(?:\n|\Z)",
+         # Third-party agency / recruiter disclaimers
+-        r"(?is)\b(?:notice to (?:recruitment |staffing )?(?:agencies|recruiters)|no unsolicited (?:agency )?resumes|unsolicited resumes from (?:third-party |search )?agencies).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:notice to (?:recruitment |staffing )?(?:agencies|recruiters)|no unsolicited (?:agency )?resumes|unsolicited resumes from (?:third-party |search )?agencies).*?(?:\n|\Z)",
+         # Pay transparency regulatory clauses
+-        r"(?is)\b(?:pay transparency nondiscrimination provision).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:pay transparency nondiscrimination provision).*?(?:\n|\Z)",
+         # Background check & drug screen compliance clauses
+-        r"(?is)\b(?:pre-employment (?:background check|drug (?:screen|test))|contingent upon successful completion of a background check).*?(?:\n\n|\Z)",
++        r"(?i)\b(?:pre-employment (?:background check|drug (?:screen|test))|contingent upon successful completion of a background check).*?(?:\n|\Z)",
+     ]
+@@ -95,6 +95,10 @@ class TextTruncator:
+         self._horizontal_spaces = re.compile(r"[ \t]+")
+         self._vertical_spaces = re.compile(r"\n{3,}")
++        self._closing_tag_pattern = re.compile(
++            rf"<\s*/\s*{re.escape(self.tag)}\s*>",
++            re.IGNORECASE,
++        )
+ 
+     def estimate_tokens(self, text: str) -> int:
+@@ -118,3 +122,3 @@ class TextTruncator:
+         # 2. Convert block and break tags to explicit newlines
+-        cleaned = self._html_breaks.sub("\n", cleaned)
++        cleaned = self._html_breaks.sub("\n\n", cleaned)
+ 
+@@ -153,3 +157,3 @@ class TextTruncator:
+         # Escape any closing tag inside user-provided content to prevent prompt escape
+-        sanitized = text.replace(f"</{self.tag}>", f"&lt;/{self.tag}&gt;")
++        sanitized = self._closing_tag_pattern.sub(f"&lt;/{self.tag}&gt;", text)
+         return f"<{self.tag}>\n{sanitized}\n</{self.tag}>"

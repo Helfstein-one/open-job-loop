@@ -1,0 +1,58 @@
+--- a/tests/test_stress_persistence.py
++++ b/tests/test_stress_persistence.py
+@@ -351,13 +351,11 @@
+ def test_hash_collision_delimiter_ambiguity() -> None:
+     """
+-    Adversarial finding:
+-    Demonstrates delimiter/positional collision in compute_job_hash when
++    Verifies that compute_job_hash avoids delimiter and positional collisions
+     one field is None and another has identical text.
+     """
+     h_title_none = compute_job_hash("Identical Description", title=None, company="Acme")
+     h_company_none = compute_job_hash("Identical Description", title="Acme", company=None)
+ 
+-    # Note: In current implementation, both generate payload 'acme::identical description'
+-    # Demonstrating vulnerability/adversarial finding:
+-    assert h_title_none == h_company_none
++    # Hardened canonical JSON hash ensures distinct field assignments never collide
++    assert h_title_none != h_company_none
+--- a/tests/test_adversarial_m1.py
++++ b/tests/test_adversarial_m1.py
+@@ -304,8 +304,8 @@
+     def test_bug_repository_missing_tuple_import_type_hints(self):
+         """
+-        EMPIRICAL DEFECT DEMONSTRATION:
+-        src/db/repository.py line 366 uses Tuple in type annotation without importing it.
+-        Any introspection tool evaluating type hints crashes with NameError.
++        Verifies src/db/repository.py imports Tuple so type hints resolve cleanly.
+         """
+-        with pytest.raises(NameError, match="name 'Tuple' is not defined"):
+-            typing.get_type_hints(JobRepository._row_to_job)
++        hints = typing.get_type_hints(JobRepository._row_to_job)
++        assert "row" in hints
++        assert hints["return"] is JobPosting
+--- a/tests/test_db.py
++++ b/tests/test_db.py
+@@ -290,6 +290,26 @@
++@pytest.mark.asyncio
++async def test_streaming_iteration_status_mutation_no_skip(repo_memory: JobRepository) -> None:
++    """
++    Asserts keyset pagination prevents row skipping when caller mutates
++    job status in-flight (e.g. INGESTED -> PREPROCESSED).
++    """
++    total = 30
++    for i in range(total):
++        j = create_sample_job(f"mutate-{i:02d}", raw_desc=f"Desc {i}", status=JobStatus.INGESTED)
++        await repo_memory.save_job(j)
++
++    processed_ids = []
++    async for job in repo_memory.iterate_jobs(status=JobStatus.INGESTED, batch_size=5):
++        processed_ids.append(job.id)
++        await repo_memory.update_status(job.id, JobStatus.PREPROCESSED)
++
++    assert len(processed_ids) == total
++    assert processed_ids == [f"mutate-{i:02d}" for i in range(total)]
++
++    stats = await repo_memory.get_stats()
++    assert stats[JobStatus.INGESTED.value] == 0
++    assert stats[JobStatus.PREPROCESSED.value] == total

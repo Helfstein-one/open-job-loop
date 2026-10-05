@@ -1,0 +1,74 @@
+[
+  {
+    "id": "match-01-python-ai-lead",
+    "title": "Senior Python & AI Systems Engineer",
+    "company": "NeuralScale Dynamics",
+    "location": "Remote",
+    "description": "Seeking a Senior Python Engineer experienced in Python 3.12, AsyncIO, and local open-weight model orchestration (Llama 3.2, Ollama). You will build agentic execution pipelines using Instructor, Pydantic structured outputs, and DuckDB immediate persistence. Must know Model Context Protocol (MCP).",
+    "raw_description": "Seeking a Senior Python Engineer experienced in Python 3.12, AsyncIO, and local open-weight model orchestration (Llama 3.2, Ollama). You will build agentic execution pipelines using Instructor, Pydantic structured outputs, and DuckDB immediate persistence. Must know Model Context Protocol (MCP).",
+    "expected_match": true,
+    "expected_decision": "shortlist",
+    "min_expected_fit_score": 0.70,
+    "domain": "AI / Python Engineering"
+  },
+  {
+    "id": "match-02-mcp-backend-architect",
+    "title": "Lead Backend Engineer (MCP & Agent Tooling)",
+    "company": "ContextStream",
+    "location": "Remote",
+    "description": "Looking for a backend engineer to design Model Context Protocol (MCP) servers and clients. Requirements: Expert in Python async event loops, SQLModel/DuckDB data pipelines, and CLI utilities with Typer and Rich. Experience integrating with local LLMs.",
+    "raw_description": "Looking for a backend engineer to design Model Context Protocol (MCP) servers and clients. Requirements: Expert in Python async event loops, SQLModel/DuckDB data pipelines, and CLI utilities with Typer and Rich. Experience integrating with local LLMs.",
+    "expected_match": true,
+    "expected_decision": "shortlist",
+    "min_expected_fit_score": 0.70,
+    "domain": "AI / Backend Infrastructure"
+  },
+  {
+    "id": "match-03-agentic-loop-developer",
+    "title": "Python Developer - Autonomous Loop Systems",
+    "company": "AgentOps Lab",
+    "location": "Remote",
+    "description": "We are creating privacy-first local CLI agents. You will implement execution harnesses with timeout guards, circuit breakers, and hash deduplication in DuckDB. Strong proficiency in Python, Instructor structured outputs, and unit testing.",
+    "raw_description": "We are creating privacy-first local CLI agents. You will implement execution harnesses with timeout guards, circuit breakers, and hash deduplication in DuckDB. Strong proficiency in Python, Instructor structured outputs, and unit testing.",
+    "expected_match": true,
+    "expected_decision": "shortlist",
+    "min_expected_fit_score": 0.70,
+    "domain": "Autonomous Agents"
+  },
+  {
+    "id": "mismatch-01-legacy-java-erp",
+    "title": "Principal Java Spring Boot ERP Architect",
+    "company": "LegacyCorp Enterprise",
+    "location": "On-site, Chicago",
+    "description": "Seeking 12+ years experience in Java 8/11/17, Spring Boot, Hibernate, Oracle DB 11g, SOAP Web Services, and IBM WebSphere. Tasked with maintaining monolithic banking ERP systems. No Python or AI development.",
+    "raw_description": "Seeking 12+ years experience in Java 8/11/17, Spring Boot, Hibernate, Oracle DB 11g, SOAP Web Services, and IBM WebSphere. Tasked with maintaining monolithic banking ERP systems. No Python or AI development.",
+    "expected_match": false,
+    "expected_decision": "discard",
+    "max_expected_fit_score": 0.35,
+    "domain": "Monolithic Enterprise Java"
+  },
+  {
+    "id": "mismatch-02-social-marketing",
+    "title": "Senior TikTok & Social Media Growth Lead",
+    "company": "ViralSpark Agency",
+    "location": "Remote",
+    "description": "Manage our brand TikTok, Instagram Reels, and influencer campaigns. Requirements: 4+ years running social paid ads, copywriting, Adobe Premiere video editing, and community engagement. Non-technical role.",
+    "raw_description": "Manage our brand TikTok, Instagram Reels, and influencer campaigns. Requirements: 4+ years running social paid ads, copywriting, Adobe Premiere video editing, and community engagement. Non-technical role.",
+    "expected_match": false,
+    "expected_decision": "discard",
+    "max_expected_fit_score": 0.20,
+    "domain": "Marketing & Social Media"
+  },
+  {
+    "id": "mismatch-03-icu-nurse",
+    "title": "Registered Nurse - Intensive Care Unit (ICU)",
+    "company": "Metropolitan Health Hospital",
+    "location": "On-site, Boston",
+    "description": "Requires active RN state license, BLS/ACLS certification, and 2+ years direct bedside ICU experience. Administer critical care, medication titration, patient triage, and bedside telemetry monitoring.",
+    "raw_description": "Requires active RN state license, BLS/ACLS certification, and 2+ years direct bedside ICU experience. Administer critical care, medication titration, patient triage, and bedside telemetry monitoring.",
+    "expected_match": false,
+    "expected_decision": "discard",
+    "max_expected_fit_score": 0.10,
+    "domain": "Healthcare Clinical Nursing"
+  }
+]
