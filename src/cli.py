@@ -351,7 +351,7 @@ def run_cmd(
                 else:
                     mcp_client = MockMcpJobClient(jobs=BUILTIN_MOCK_JOBS)
             else:
-                mcp_client = McpJobClient(command="uvx", args=["mcp-server-linkedin@latest"])
+                mcp_client = McpJobClient(command="uvx", args=["mcp-server-linkedin@latest"], tool_name="search_jobs")
 
             await mcp_client.connect()
 

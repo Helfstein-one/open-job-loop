@@ -214,7 +214,7 @@ class McpJobClient(BaseJobIngestionClient):
         cwd: str | None = None,
         server_params: StdioServerParameters | None = None,
         tool_name: str = "fetch_jobs",
-        read_timeout_seconds: float | None = 30.0,
+        read_timeout_seconds: float | None = 300.0,
         source_name: str = "mcp",
         auto_reconnect: bool = False,
     ) -> None:
@@ -344,28 +344,49 @@ class McpJobClient(BaseJobIngestionClient):
 
         assert self._session is not None
         tool_args = {"limit": limit, **kwargs}
+        if self.tool_name == "search_jobs":
+            tool_args = {"keywords": "Python Software Engineer", "max_pages": 1}
 
-        try:
-            result = await self._session.call_tool(
-                self.tool_name,
-                arguments=tool_args,
-                read_timeout_seconds=self.read_timeout_seconds,
-            )
-        except Exception as exc:
-            raise McpToolExecutionError(
-                f"Tool '{self.tool_name}' execution failed: {exc}"
-            ) from exc
+        import asyncio
+        max_attempts = 120
+        for attempt in range(max_attempts):
+            try:
+                result = await self._session.call_tool(
+                    self.tool_name,
+                    arguments=tool_args,
+                    read_timeout_seconds=self.read_timeout_seconds,
+                )
+            except Exception as exc:
+                if "timed out" in str(exc).lower():
+                    logger.warning("Tool execution timed out, retrying in 5s...")
+                    await asyncio.sleep(5)
+                    continue
+                raise McpToolExecutionError(
+                    f"Tool '{self.tool_name}' execution failed: {exc}"
+                ) from exc
 
-        if getattr(result, "is_error", False):
-            error_details = []
-            for block in getattr(result, "content", []):
-                text = getattr(block, "text", "")
-                if text:
-                    error_details.append(text)
-            err_msg = "; ".join(error_details) if error_details else "Server reported tool error"
-            raise McpToolExecutionError(
-                f"Tool '{self.tool_name}' returned error: {err_msg}"
-            )
+            if getattr(result, "is_error", False):
+                error_details = []
+                for block in getattr(result, "content", []):
+                    text = getattr(block, "text", "")
+                    if text:
+                        error_details.append(text)
+                err_msg = "; ".join(error_details) if error_details else "Server reported tool error"
+                
+                msg_lower = err_msg.lower()
+                if "login is still in progress" in msg_lower or "downloading the patchright chromium browser" in msg_lower or "keychain prompt" in msg_lower:
+                    logger.warning(f"MCP Plugin waiting for setup/login. Retrying in 10s... ({attempt+1}/{max_attempts}) | MSG: {err_msg}")
+                    await asyncio.sleep(10)
+                    continue
+                    
+                raise McpToolExecutionError(
+                    f"Tool '{self.tool_name}' returned error: {err_msg}"
+                )
+            
+            # If no error, break out of loop
+            break
+        else:
+            raise McpToolExecutionError("Timed out waiting for LinkedIn MCP setup.")
 
         raw_dicts = self._extract_payload_dicts(result)
         jobs: list[JobPosting] = []

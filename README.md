@@ -45,21 +45,41 @@ graph TD
 
 ### Prerequisites
 - Python 3.12+
-- Local Ollama running (e.g., Llama 3.2 model)
-- Appropriate MCP servers configured
+- `uv` package manager (para baixar o MCP e dependências rapidamente)
+- [Ollama](https://ollama.com/) instalado com o modelo base (ex: `ollama run llama3.2:3b`)
 
-### Installation
+### Instalação
+Clone o repositório e crie um ambiente virtual:
 ```bash
-git clone https://github.com/yourusername/open-job-loop.git
+git clone https://github.com/Helfstein-one/open-job-loop.git
 cd open-job-loop
-pip install -r requirements.txt
+uv venv .venv
+source .venv/bin/activate
+uv pip install -e .
 ```
 
-### Execution
-Run the loop:
+### Execução em Mock (Para Testes)
+Se você não quiser usar o plugin do LinkedIn real ainda, pode rodar o pipeline com dados fixos (mocks) para verificar o processamento, truncação e inferência local do Llama3.2 gravando no DuckDB:
 ```bash
-python -m src.cli
+python -m src.cli run --mock --limit 3
 ```
+
+### Execução Real (Mundo Real via MCP)
+Para rodar garimpando vagas ativas reais do LinkedIn:
+
+1. **(Opcional) Setup inicial do Plugin MCP:** Se for sua primeira vez, é recomendado rodar o plugin solto para permitir que ele baixe o navegador `Patchright` de forma silenciosa e abra a janela de login do LinkedIn para você (faça o login na janela que abrir e aperte `CTRL+C` no terminal):
+   ```bash
+   uvx mcp-server-linkedin@latest
+   ```
+
+2. **Inicie o Agente:**
+   ```bash
+   python -m src.cli run --no-mock --keywords "Python Software Engineer" --limit 5
+   ```
+
+3. **Autenticação Automática:** Se o script parar com a mensagem `MCP Plugin waiting for setup/login`, é porque o plugin está solicitando sua senha de usuário do macOS (Keychain) ou abrindo o LinkedIn. Basta conceder acesso e o pipeline continuará sozinho em um loop de retry até pegar as vagas!
+
+4. **Dashboard:** O painel irá exibir vagas Descartadas e Shortlisted dependendo do "Fit Score" gerado pela IA local!
 
 ## License
 
