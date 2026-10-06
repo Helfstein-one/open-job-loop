@@ -1,18 +1,11 @@
 # OPEN-JOB-LOOP
 
 ```text
-     _.-""""-._
-   .'          `.
-  /   _.-""-._   \
- |  .'        `.  |
- |  |  .-""-.  |  |
- |  |  |    |  |  |
- |  |  `-..-'  |  |
- |  `.        .'  |
-  \   `-....-'   /
-   `._        _.'
-      `-....-'
-  OPEN JOB LOOP
+   ____  ____  _____ _   __       __________  ____       __    ____  ____  ____ 
+  / __ \/ __ \/ ___// | / /      / / / / __ \/ __ )     / /   / __ \/ __ \/ __ \
+ / / / / /_/ / __/ /  |/ /  __  / / / / / / / __  |    / /   / / / / / / / /_/ /
+/ /_/ / ____/ /___/ /|  /  / /_/ / /_/ / /_/ / /_/ /   / /___/ /_/ / /_/ / ____/ 
+\____/_/   /_____/_/ |_/   \____/\____/\____/_____/   /_____/\____/\____/_/
 ```
 
 OPEN-JOB-LOOP is a fully autonomous, privacy-first CLI agent that executes in closed loops (Plan-Act-Observe-Evaluate) to discover, deduplicate, evaluate technical fit, and structure job applications. The system runs entirely on open-weight local models, bypassing paid cloud APIs completely.
