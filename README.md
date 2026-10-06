@@ -1,21 +1,18 @@
 # OPEN-JOB-LOOP
 
 ```text
-     _
-   //\
-   V  \
-    \  \_
-     \,'.`-.
-      |\ `. `.
-      ( \  `. `-.                        _,.-:\
-       \ \   `.  `-._             __..--' ,-';/
-        \ `.   `-.   `-..___..---'   _.--' ,'/
-         `. `.    `-._        __..--'    ,' /
-           `. `-_     ``--..''       _.-' ,'
-             `-_ `-.___        __,--'   ,'
-                `-.__  `----"""    __.-'
-                     `--..____..--'
-               NANO BANANA POWERED
+     _.-""""-._
+   .'          `.
+  /   _.-""-._   \
+ |  .'        `.  |
+ |  |  .-""-.  |  |
+ |  |  |    |  |  |
+ |  |  `-..-'  |  |
+ |  `.        .'  |
+  \   `-....-'   /
+   `._        _.'
+      `-....-'
+  OPEN JOB LOOP
 ```
 
 OPEN-JOB-LOOP is a fully autonomous, privacy-first CLI agent that executes in closed loops (Plan-Act-Observe-Evaluate) to discover, deduplicate, evaluate technical fit, and structure job applications. The system runs entirely on open-weight local models, bypassing paid cloud APIs completely.
