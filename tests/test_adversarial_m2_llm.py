@@ -21,7 +21,7 @@ from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import ValidationError
 
-from src.llm.evaluator import (
+from src.infrastructure.adapters.llm_evaluator import (
     JobFitEvaluator,
     LLMConnectionError,
     LLMError,
@@ -29,13 +29,13 @@ from src.llm.evaluator import (
     LLMTimeoutError,
     LLMValidationError,
 )
-from src.llm.prompts import (
+from src.infrastructure.adapters.llm_prompts import (
     JOB_POSTING_TAG,
     build_evaluation_prompt,
     strip_job_posting_tags,
     wrap_job_posting,
 )
-from src.models.schemas import CandidateProfile, MatchEvaluation, Recommendation
+from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 from tests.test_llm import is_ollama_available
 
 

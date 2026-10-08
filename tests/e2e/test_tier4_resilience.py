@@ -24,19 +24,19 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from src.cli import app
-from src.core.harness import (
+from src.presentation.cli import app
+from src.application.use_cases.harness import (
     CircuitOpenError,
     CircuitState,
     LocalLoopGuard,
     MCPCircuitBreaker,
 )
-from src.core.pipeline import JobPipeline, PipelineConfig
-from src.core.truncator import TextTruncator
-from src.db.repository import JobRepository
-from src.llm.evaluator import JobFitEvaluator
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
+from src.application.use_cases.truncator import TextTruncator
+from src.infrastructure.adapters.repository import JobRepository
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     CandidateProfile,
     JobPosting,
     JobStatus,

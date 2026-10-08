@@ -28,9 +28,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from src.db.database import DatabaseManager
-from src.db.repository import JobRepository, compute_job_hash
-from src.models.schemas import JobPosting, JobStatus, MatchEvaluation, Recommendation
+from src.infrastructure.adapters.database import DatabaseManager
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation
 
 
 @pytest.fixture
@@ -249,8 +249,8 @@ def test_crash_recovery_sigkill(stress_temp_db: str) -> None:
     """
     child_script = f"""
 import time, os, sys, asyncio
-from src.db.repository import JobRepository, compute_job_hash
-from src.models.schemas import JobPosting, JobStatus
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.domain.models import JobPosting, JobStatus
 
 async def main():
     repo = JobRepository(db_path='{stress_temp_db}')

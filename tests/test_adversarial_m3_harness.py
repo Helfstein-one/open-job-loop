@@ -24,22 +24,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.core.harness import (
+from src.application.use_cases.harness import (
     CircuitOpenError,
     CircuitState,
     LocalLoopGuard,
     MaxIterationsReachedError,
     MCPCircuitBreaker,
 )
-from src.core.pipeline import (
+from src.application.use_cases.pipeline import (
     JobPipeline,
     PipelineConfig,
     PipelineEventType,
 )
-from src.db.repository import JobRepository, compute_job_hash
-from src.llm.evaluator import JobFitEvaluator, LLMTimeoutError
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator, LLMTimeoutError
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     JobPosting,
     JobStatus,
     MatchEvaluation,

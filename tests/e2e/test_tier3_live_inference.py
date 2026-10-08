@@ -16,13 +16,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.core.harness import LocalLoopGuard
-from src.core.pipeline import JobPipeline, PipelineConfig
-from src.core.truncator import TextTruncator
-from src.db.repository import JobRepository
-from src.llm.evaluator import JobFitEvaluator
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import CandidateProfile, MatchEvaluation, Recommendation
+from src.application.use_cases.harness import LocalLoopGuard
+from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
+from src.application.use_cases.truncator import TextTruncator
+from src.infrastructure.adapters.repository import JobRepository
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 from tests.test_local_inference import is_ollama_model_available
 
 FIXTURE_PATH = Path("fixtures/golden_jobs.json")

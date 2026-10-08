@@ -25,20 +25,20 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
-from src.cli import app
-from src.core.harness import LocalLoopGuard
-from src.core.pipeline import JobPipeline, PipelineConfig
-from src.db.repository import JobRepository, compute_job_hash
-from src.llm.evaluator import JobFitEvaluator
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.presentation.cli import app
+from src.application.use_cases.harness import LocalLoopGuard
+from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     JobPosting,
     JobStatus,
     MatchEvaluation,
     Recommendation,
 )
-from src.ui.banner import TAGLINE
-from src.ui.console import HeadlessPipelineUI, LivePipelineUI, create_pipeline_ui
+from src.presentation.ui_banner import TAGLINE
+from src.presentation.ui_console import HeadlessPipelineUI, LivePipelineUI, create_pipeline_ui
 
 VENV_BIN = Path(sys.executable).parent
 JOBLOOP_BIN = VENV_BIN / "jobloop"

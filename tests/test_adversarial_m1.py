@@ -10,9 +10,9 @@ import typing
 import pytest
 from pydantic import ValidationError
 
-from src.core.truncator import DescriptionTooShortError, TextTruncator
-from src.db.repository import JobRepository
-from src.models.schemas import (
+from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator
+from src.infrastructure.adapters.repository import JobRepository
+from src.domain.models import (
     JobPosting,
     MatchEvaluation,
     Recommendation,

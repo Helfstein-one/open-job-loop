@@ -13,9 +13,9 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
-from src.cli import app
-from src.db.repository import JobRepository
-from src.models.schemas import JobPosting, JobStatus, Recommendation
+from src.presentation.cli import app
+from src.infrastructure.adapters.repository import JobRepository
+from src.domain.models import JobPosting, JobStatus, Recommendation
 
 runner = CliRunner()
 

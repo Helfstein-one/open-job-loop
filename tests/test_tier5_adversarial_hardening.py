@@ -26,22 +26,22 @@ import pytest
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import ValidationError
 
-from src.core.harness import (
+from src.application.use_cases.harness import (
     CircuitOpenError,
     CircuitState,
     LocalLoopGuard,
     MaxIterationsReachedError,
     MCPCircuitBreaker,
 )
-from src.core.pipeline import (
+from src.application.use_cases.pipeline import (
     JobPipeline,
     PipelineConfig,
     PipelineResult,
 )
-from src.core.truncator import DescriptionTooShortError, TextTruncator, TruncationResult
-from src.db.database import DatabaseManager
-from src.db.repository import JobRepository, compute_job_hash
-from src.llm.evaluator import (
+from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator, TruncationResult
+from src.infrastructure.adapters.database import DatabaseManager
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.infrastructure.adapters.llm_evaluator import (
     JobFitEvaluator,
     LLMConnectionError,
     LLMError,
@@ -49,7 +49,7 @@ from src.llm.evaluator import (
     LLMTimeoutError,
     LLMValidationError,
 )
-from src.llm.prompts import (
+from src.infrastructure.adapters.llm_prompts import (
     build_evaluation_messages,
     build_evaluation_prompt,
     format_candidate_profile,
@@ -57,8 +57,8 @@ from src.llm.prompts import (
     strip_job_posting_tags,
     wrap_job_posting,
 )
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     CandidateProfile,
     JobPosting,
     JobStatus,

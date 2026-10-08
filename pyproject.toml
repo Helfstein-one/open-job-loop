@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "open-job-loop"
 version = "0.1.0"
 description = "Autonomous, privacy-first CLI agent executing closed loops to discover, deduplicate, evaluate technical fit, and structure job applications."
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Open Job Loop Team" }
@@ -31,6 +31,7 @@ dependencies = [
     "instructor>=1.0.0",
     "openai>=1.0.0",
     "mcp>=1.0.0",
+    "playwright>=1.42.0",
 ]
 
 [project.optional-dependencies]

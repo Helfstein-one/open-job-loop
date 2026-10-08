@@ -26,20 +26,20 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
-from src.core.harness import LocalLoopGuard
-from src.core.pipeline import JobPipeline
-from src.core.truncator import TextTruncator
-from src.db.repository import JobRepository, compute_job_hash
-from src.llm.evaluator import JobFitEvaluator
-from src.mcp.client import McpPayloadError, parse_job_payload
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.application.use_cases.harness import LocalLoopGuard
+from src.application.use_cases.pipeline import JobPipeline
+from src.application.use_cases.truncator import TextTruncator
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_client import McpPayloadError, parse_job_payload
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     CandidateProfile,
     JobPosting,
     MatchEvaluation,
     Recommendation,
 )
-from src.ui.console import (
+from src.presentation.ui_console import (
     LivePipelineUI,
     UIState,
     build_layout,

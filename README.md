@@ -8,78 +8,147 @@
 \____/_/   /_____/_/ |_/   \____/\____/\____/_____/   /_____/\____/\____/_/
 ```
 
-OPEN-JOB-LOOP is a fully autonomous, privacy-first CLI agent that executes in closed loops (Plan-Act-Observe-Evaluate) to discover, deduplicate, evaluate technical fit, and structure job applications. The system runs entirely on open-weight local models, bypassing paid cloud APIs completely.
+O **OPEN-JOB-LOOP** evoluiu de uma CLI simples para um verdadeiro **Agente Autônomo de Carreira Pessoal**. Ele executa um pipeline complexo (Busca - Triagem - Deduplicação - Preenchimento de Formulários) para garantir que você só foque nas vagas de alto nível técnico ("Fit Score"). Tudo isso encapsulado em Microserviços (Docker/Podman) e acessível via chat interativo (Open WebUI).
 
-## Architecture
+## 🚀 Novidades da V2
+- **Hexagonal Architecture (Ports & Adapters)**: Código rigorosamente estruturado com SOLID (`domain/`, `application/`, `infrastructure/`, `presentation/`).
+- **Automação "Easy Apply"**: Robô integrado ao Playwright que preenche os formulários do LinkedIn de forma invisível.
+- **RAG & Currículo Vetorial**: Utiliza `DuckDB VSS` para armazenar o seu currículo em memória vetorial, permitindo que a IA redija respostas perfeitas e customizadas para as perguntas abertas do recrutador na hora de aplicar.
+- **Microserviços (Docker/Podman)**: Infraestrutura isolada composta por 3 containers (`open-webui`, `ollama`, `job-bot`).
+- **API Híbrida**: O core é ativado tanto por CLI (Typer) quanto por Endpoints REST (FastAPI).
+
+---
+
+## 🏗 Arquitetura & Jornada do Agente
+
+O fluxo de funcionamento do projeto foi desenhado para ser totalmente autônomo. Abaixo você confere o caminho que uma vaga percorre desde a descoberta até a candidatura final:
+
+```mermaid
+sequenceDiagram
+    participant User as 🧑‍💻 Você
+    participant UI as 💬 Open WebUI
+    participant API as ⚙️ FastAPI (job-bot)
+    participant MCP as 🔍 LinkedIn MCP
+    participant Llama as 🧠 Ollama (Llama 3.2)
+    participant DB as 💾 DuckDB (VSS)
+    participant Bot as 🤖 Playwright
+    
+    User->>UI: "Aplique para vagas de Python"
+    UI->>API: POST /start {keywords: "Python"}
+    
+    rect rgb(30, 30, 30)
+        Note right of API: 1. DESCOBERTA E TRIAGEM
+        API->>MCP: Buscar vagas no LinkedIn
+        MCP-->>API: Lista de Vagas Brutas
+        API->>DB: Checa Hash (Deduplicação)
+        API->>Llama: Prompt: Avalie as vagas inéditas
+        Llama-->>API: Retorna "Fit Score" (0-100)
+        API->>DB: Salva vagas boas como SHORTLISTED
+    end
+    
+    rect rgb(30, 30, 50)
+        Note right of API: 2. AUTO-APPLY (Assíncrono)
+        API->>Bot: Inicia worker de aplicação
+        Bot->>DB: Puxa vagas SHORTLISTED
+        Bot->>MCP: Navega invisível (linkedin_state.json)
+        Bot->>Bot: Clica em "Easy Apply" e extrai perguntas
+        Bot->>DB: Busca semântica (RAG) da resposta ideal no seu currículo VSS
+        Bot->>Bot: Preenche e Clica em "Submit"
+        Bot->>DB: Atualiza status para APPLIED
+    end
+    
+    UI->>API: GET /report
+    API-->>UI: Retorna JSON consolidado
+    UI-->>User: "Relatório: 15 vagas aplicadas com sucesso!"
+```
+
+### Topologia de Containers (Podman/Docker)
 
 ```mermaid
 graph TD
-    CLI[Typer CLI / Rich Terminal] -->|Starts Loop| ORCH[Agent Orchestrator]
-    
-    subgraph Execution Harness
-        ORCH -->|Compute Timeout Guard| LOOP[LocalLoopGuard]
-        LOOP -->|Context Truncator| MEM[TextTruncator]
+    subgraph Host [Seu Computador / Mac]
+        dir1[./data/open_job_loop.duckdb]
+        dir2[./data/linkedin_state.json]
+    end
+
+    subgraph Podman Network [Rede Isolada]
+        UI[ghcr.io/open-webui]:::ui
+        OLLAMA[ollama/ollama:latest]:::llm
+        BOT[open-job-loop:job-bot]:::bot
+        
+        UI <-->|HTTP: 11434| OLLAMA
+        UI <-->|HTTP: 8000| BOT
+        BOT <-->|HTTP: 11434| OLLAMA
     end
     
-    LOOP <-->|Queries/Executes Tools| MCP[MCP Client Bridge]
-    MCP <-->|Standardized Protocol| EXT1[linkedin-mcp-server]
-    MCP <-->|Standardized Protocol| EXT2[local-resume-reader]
+    Host -.->|Volume Compartilhado| BOT
     
-    LOOP <-->|Pydantic Prompts via Instructor| LLM[Local Ollama Node]
-    LLM -->|Llama 3.2 8B| EVAL[Fast Triage & JSON Extraction]
-    
-    LOOP -->|Persist Hashes & Scores| DB[(DuckDB)]
-    DB -->|Read Deduplication| LOOP
+    classDef ui fill:#4e79a7,color:#fff,stroke:#333
+    classDef llm fill:#e15759,color:#fff,stroke:#333
+    classDef bot fill:#59a14f,color:#fff,stroke:#333
 ```
 
-## Features
+---
 
-- **Local-First Inference**: Operates locally with Ollama / llama.cpp models.
-- **Mandatory Structured Outputs**: Powered by `instructor` and Pydantic.
-- **Context Window Management**: Strips boilerplate/HTML to fit smaller local models securely.
-- **VRAM/Compute Awareness**: Custom `LocalLoopGuard` utilizes timeouts over token budgeting to avoid stalling.
-- **Stateless Runs**: On-the-fly deduplication mapping via DuckDB SHA256 hashes.
-- **Rich User Interface**: Stunning CLI feedback utilizing the `rich` library.
+## 🛠 Como Usar (Deploy em 3 Passos)
 
-## How to Use
+### 1. Requisitos
+- **Docker** ou **Podman** instalados na sua máquina.
 
-### Prerequisites
-- Python 3.12+
-- `uv` package manager (para baixar o MCP e dependências rapidamente)
-- [Ollama](https://ollama.com/) instalado com o modelo base (ex: `ollama run llama3.2:3b`)
-
-### Instalação
-Clone o repositório e crie um ambiente virtual:
+### 2. Subindo a Infraestrutura
+Abra o terminal na pasta do projeto e inicie os microserviços:
 ```bash
-git clone https://github.com/Helfstein-one/open-job-loop.git
-cd open-job-loop
-uv venv .venv
-source .venv/bin/activate
-uv pip install -e .
-```
+# Se usar Docker:
+docker-compose up -d --build
 
-### Execução em Mock (Para Testes)
-Se você não quiser usar o plugin do LinkedIn real ainda, pode rodar o pipeline com dados fixos (mocks) para verificar o processamento, truncação e inferência local do Llama3.2 gravando no DuckDB:
+# Se usar Podman:
+podman-compose up -d --build
+```
+*Isso fará o download do Playwright e do Open WebUI.*
+
+### 3. Baixando a Inteligência
+Com os containers rodando, instrua o seu nó do Ollama a baixar os modelos Open-Weight necessários:
 ```bash
-python -m src.cli run --mock --limit 3
+# Se usar Docker:
+docker exec ollama ollama pull llama3.2:3b
+docker exec ollama ollama pull nomic-embed-text
+
+# Se usar Podman:
+podman exec ollama ollama pull llama3.2:3b
+podman exec ollama ollama pull nomic-embed-text
 ```
 
-### Execução Real (Mundo Real via MCP)
-Para rodar garimpando vagas ativas reais do LinkedIn:
+### 4. A Ponte com o LinkedIn (Login Manual Seguro)
+O LinkedIn barra robôs sem sessão. Para o `Auto-Apply` funcionar:
+1. Rode na sua máquina: `python src/presentation/linkedin_auth.py`
+2. O navegador se abrirá. Faça login na sua conta normalmente.
+3. Aperte `ENTER` no terminal. Seus cookies de sessão serão criptografados e salvos em `data/linkedin_state.json`. O Container lerá esse arquivo a partir de agora e será invisível.
 
-1. **(Opcional) Setup inicial do Plugin MCP:** Se for sua primeira vez, é recomendado rodar o plugin solto para permitir que ele baixe o navegador `Patchright` de forma silenciosa e abra a janela de login do LinkedIn para você (faça o login na janela que abrir e aperte `CTRL+C` no terminal):
-   ```bash
-   uvx mcp-server-linkedin@latest
-   ```
+---
 
-2. **Inicie o Agente:**
-   ```bash
-   python -m src.cli run --no-mock --keywords "Python Software Engineer" --limit 5
-   ```
+## 🗣 Operação pelo Open WebUI
 
-3. **Autenticação Automática:** Se o script parar com a mensagem `MCP Plugin waiting for setup/login`, é porque o plugin está solicitando sua senha de usuário do macOS (Keychain) ou abrindo o LinkedIn. Basta conceder acesso e o pipeline continuará sozinho em um loop de retry até pegar as vagas!
+Abra seu navegador e acesse **`http://localhost:8080`**.
+1. Crie sua conta administrativa local.
+2. Na aba **Workspace > Tools**, crie uma Tool chamada `JobBot` e cole o conteúdo do nosso arquivo `src/presentation/open_webui_tool.py`.
+3. No chat, ative a Tool e diga: *"Inicie uma busca por vagas de Desenvolvedor Python Pleno"*.
+4. O container `job-bot` receberá o POST, buscará vagas via MCP, passará pelo filtro vetorial do Llama 3.2, e começará o Auto-Apply no background.
 
-4. **Dashboard:** O painel irá exibir vagas Descartadas e Shortlisted dependendo do "Fit Score" gerado pela IA local!
+Se quiser saber o status, basta pedir ao chat: *"Me dê o relatório diário das vagas processadas"*.
+
+## 🧪 Desenvolvimento e Testes
+
+O projeto conta com mais de 90 testes separados nas camadas Hexagonais usando `pytest`:
+```bash
+# Rodar Testes Unitários
+pytest tests/unit
+
+# Rodar Integração
+pytest tests/integration
+
+# End-to-End
+pytest tests/e2e
+```
 
 ## License
 

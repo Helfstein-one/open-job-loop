@@ -20,15 +20,15 @@ import sys
 
 import pytest
 
-from src.mcp.client import (
+from src.infrastructure.adapters.mcp_client import (
     McpConnectionError,
     McpJobClient,
     McpPayloadError,
     McpToolExecutionError,
     parse_job_payload,
 )
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import JobStatus
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import JobStatus
 
 # ==============================================================================
 # Helper to get child PIDs for leakage verification

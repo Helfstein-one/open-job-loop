@@ -14,10 +14,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.llm.evaluator import JobFitEvaluator
-from src.llm.prompts import build_evaluation_messages
-from src.mcp.mock_client import MockMcpJobClient
-from src.models.schemas import (
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.llm_prompts import build_evaluation_messages
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.domain.models import (
     CandidateProfile,
     JobPosting,
     MatchEvaluation,
