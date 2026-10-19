@@ -417,24 +417,39 @@ class McpJobClient(BaseJobIngestionClient):
                     if getattr(res, "is_error", False): continue
                     
                     desc = ""
+                    company = "LinkedIn Company"
+                    location = "Remote"
                     for block in getattr(res, "content", []):
                         text = getattr(block, "text", "")
                         try:
                             import json
                             parsed = json.loads(text)
                             if isinstance(parsed, dict):
-                                data = parsed.get("job", parsed)
-                                desc_part = data.get("description", "")
-                                if desc_part:
-                                    desc += desc_part + "\n"
-                        except:
+                                if "sections" in parsed and "job_posting" in parsed["sections"]:
+                                    jp_text = parsed["sections"]["job_posting"]
+                                    desc += jp_text + "\n"
+                                    lines = [l.strip() for l in jp_text.split("\n") if l.strip()]
+                                    if len(lines) >= 1 and not lines[0].lower().startswith("is this"):
+                                        company = lines[0]
+                                    if len(lines) >= 2 and not lines[1].lower().startswith("is this"):
+                                        title = lines[1]
+                                    if len(lines) >= 3 and not lines[2].lower().startswith("is this"):
+                                        location = lines[2].split("·")[0].strip()
+                                else:
+                                    data = parsed.get("job", parsed)
+                                    desc += data.get("description", "") + "\n"
+                                    if data.get("title"):
+                                        title = data["title"]
+                                    if data.get("company"):
+                                        company = data["company"].get("name", "") if isinstance(data["company"], dict) else str(data["company"])
+                        except Exception:
                             desc += text + "\n"
-                            
+
                     raw = {
                         "id": str(jid),
                         "title": title,
-                        "company": title.split()[-1] if " " in title else "Unknown",
-                        "location": "LinkedIn",
+                        "company": company,
+                        "location": location,
                         "description": desc.strip() or "No description",
                         "url": f"https://www.linkedin.com/jobs/view/{jid}"
                     }

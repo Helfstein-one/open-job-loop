@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import logging
 from pathlib import Path
@@ -44,6 +45,10 @@ class AutoApplyWorker:
             f"Iniciando Worker de Auto-Apply multi-canal (dry_run={self.dry_run}, headless={self.headless}, resume={self.resume_path})..."
         )
         conn = duckdb.connect(self.db_path, read_only=False)
+        try:
+            conn.execute("INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;")
+        except Exception:
+            pass
 
         # Garantir que a tabela existe mesmo em bancos novos
         conn.execute("""
@@ -70,10 +75,14 @@ class AutoApplyWorker:
             );
         """)
 
-        query = (
-            "SELECT id, title, company, url, rationale, matched_skills, missing_skills "
-            "FROM job_postings WHERE status = 'SHORTLISTED'"
-        )
+        cols_available = [c[0].lower() for c in conn.execute("DESCRIBE job_postings;").fetchall()]
+        select_fields = ["id", "title", "company", "url"]
+        if "evaluation" in cols_available:
+            select_fields.append("evaluation")
+        elif "rationale" in cols_available:
+            select_fields.extend(["rationale", "matched_skills", "missing_skills"])
+
+        query = f"SELECT {', '.join(select_fields)} FROM job_postings WHERE status = 'SHORTLISTED'"
         if limit:
             query += f" LIMIT {limit}"
         res = conn.execute(query).fetchall()
@@ -118,8 +127,26 @@ class AutoApplyWorker:
 
             page = await context.new_page()
 
-            for job in res:
-                job_id, title, company, url, rationale, matched_skills, missing_skills = job
+            for job_row in res:
+                job_id, title, company, url = job_row[0], job_row[1], job_row[2], job_row[3]
+                rationale, matched_skills, missing_skills = "", "", ""
+                if "evaluation" in cols_available and len(job_row) > 4:
+                    eval_raw = job_row[4]
+                    if eval_raw:
+                        try:
+                            eval_data = json.loads(eval_raw) if isinstance(eval_raw, str) else eval_raw
+                            rationale = eval_data.get("reasoning", "")
+                            matched = eval_data.get("matched_skills", [])
+                            matched_skills = ", ".join(matched) if isinstance(matched, list) else str(matched)
+                            missing = eval_data.get("missing_skills", [])
+                            missing_skills = ", ".join(missing) if isinstance(missing, list) else str(missing)
+                        except Exception:
+                            pass
+                elif len(job_row) >= 7:
+                    rationale = job_row[4] or ""
+                    matched_skills = job_row[5] or ""
+                    missing_skills = job_row[6] or ""
+
                 logger.info(f"Iniciando fluxo para vaga: '{title}' na '{company}'")
                 job_ctx = {
                     "id": job_id,

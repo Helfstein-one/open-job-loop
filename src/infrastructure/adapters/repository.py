@@ -110,7 +110,7 @@ class JobRepository:
             ?, ?, ?, ?, ?, ?,
             ?, ?
         )
-        ON CONFLICT (content_hash) DO NOTHING
+        ON CONFLICT DO NOTHING
         RETURNING id;
         """
 

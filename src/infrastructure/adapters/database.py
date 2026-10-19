@@ -85,6 +85,10 @@ class DatabaseManager:
                 self._conn = duckdb.connect(self.db_path, read_only=False)
                 # Configure pragmas for performance and durability
                 self._conn.execute("PRAGMA threads=4;")
+                try:
+                    self._conn.execute("INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;")
+                except Exception:
+                    pass
             return self._conn
 
     def initialize(self) -> None:

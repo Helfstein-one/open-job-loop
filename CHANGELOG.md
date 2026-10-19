@@ -19,7 +19,9 @@ All notable changes to this project will be documented in this file.
 - **Schema & Tracking Enhancements**:
   - `ApplicationChannel` enum (`LINKEDIN_EASY_APPLY`, `GREENHOUSE`, `LEVER`, `ASHBY`, `EXTERNAL_MANUAL`).
   - Automatic DuckDB migrations for `channel`, `application_log`, and `error_message` columns in `job_postings`.
-  - Added new unit, integration, and E2E tests bringing the test suite to 270+ passing tests.
+  - HNSW experimental persistence handling across DuckDB connections to prevent WAL replay corruption.
+  - Live dry-run validated against real LinkedIn and Ashby ATS job postings.
+  - Comprehensive test suite expanded to 432 passing tests across unit, integration, adversarial, and E2E suites.
 
 ## [2.0.0] - 2026-10-19
 ### Added
