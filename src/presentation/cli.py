@@ -558,14 +558,25 @@ def apply_cmd(
         "-n",
         help="Maximum number of shortlisted jobs to process.",
     ),
+    resume_path: Optional[str] = typer.Option(
+        "data/resume.pdf",
+        "--resume-path",
+        "-r",
+        help="Path to candidate base resume PDF for automatic upload.",
+    ),
     mock: bool = typer.Option(
         False,
         "--mock/--no-mock",
         help="Use mock embeddings and heuristics.",
     ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Disable interactive terminal active learning prompt and use best LLM inference.",
+    ),
 ) -> None:
     """
-    Execute LinkedIn Easy Apply automation for all SHORTLISTED jobs using DuckDB VSS RAG.
+    Execute LinkedIn Easy Apply & ATS (Greenhouse, Lever, Ashby) automation for all SHORTLISTED jobs.
     """
     async def _apply() -> None:
         worker = AutoApplyWorker(
@@ -573,6 +584,8 @@ def apply_cmd(
             headless=headless,
             dry_run=dry_run,
             mock_mode=mock,
+            resume_path=resume_path,
+            interactive_active_learning=not non_interactive,
         )
         stats = await worker.run(limit=limit)
         console.print(
@@ -582,7 +595,7 @@ def apply_cmd(
                 f"Applied: [bold green]{stats['applied']}[/] | "
                 f"Failed: [bold red]{stats['failed']}[/] | "
                 f"Skipped: [bold yellow]{stats['skipped']}[/]",
-                title="[bold cyan]LinkedIn Application Summary[/]",
+                title="[bold cyan]Multi-Channel Application Summary[/]",
                 border_style="green" if stats["applied"] > 0 else "yellow",
             )
         )
@@ -680,6 +693,12 @@ def run_cmd(
         False,
         "--dry-run/--no-dry-run",
         help="When --apply is active, simulate form filling without submitting.",
+    ),
+    resume_path: Optional[str] = typer.Option(
+        "data/resume.pdf",
+        "--resume-path",
+        "-r",
+        help="Path to candidate base resume PDF for automatic upload.",
     ),
 ) -> None:
     """
@@ -786,6 +805,7 @@ def run_cmd(
                     headless=headless,
                     dry_run=dry_run,
                     mock_mode=mock,
+                    resume_path=resume_path,
                 )
                 apply_stats = await worker.run(limit=limit)
                 console.print(

@@ -24,6 +24,21 @@ class JobStatus(str, Enum):
     SKIPPED_TIMEOUT = "SKIPPED_TIMEOUT"
     ERROR = "ERROR"
     FAILED = "FAILED"  # Support for fatal pre-processing or unrecoverable failures
+    APPLIED = "APPLIED"
+    APPLIED_DRY_RUN = "APPLIED_DRY_RUN"
+    FAILED_TO_APPLY = "FAILED_TO_APPLY"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class ApplicationChannel(str, Enum):
+    """
+    Channel or ATS platform used for the application.
+    """
+    LINKEDIN_EASY_APPLY = "LINKEDIN_EASY_APPLY"
+    GREENHOUSE = "GREENHOUSE"
+    LEVER = "LEVER"
+    ASHBY = "ASHBY"
+    EXTERNAL_MANUAL = "EXTERNAL_MANUAL"
 
 
 class Recommendation(str, Enum):
@@ -142,6 +157,14 @@ class JobPosting(BaseModel):
     source: str = Field(
         default="mcp",
         description="Origin provider or MCP server name."
+    )
+    channel: Optional[ApplicationChannel] = Field(
+        default=None,
+        description="Application channel / ATS platform (e.g., LINKEDIN_EASY_APPLY, GREENHOUSE, LEVER, ASHBY)."
+    )
+    application_log: Optional[str] = Field(
+        default=None,
+        description="Detailed execution log or questions answered during the application process."
     )
     error_message: Optional[str] = Field(
         default=None,

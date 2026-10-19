@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS job_postings (
     token_count INTEGER,
     url VARCHAR,
     source VARCHAR DEFAULT 'mcp',
+    channel VARCHAR,
+    application_log TEXT,
     error_message VARCHAR,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -96,6 +98,11 @@ class DatabaseManager:
             conn.execute(DDL_CREATE_INDEX_HASH)
             conn.execute(DDL_CREATE_INDEX_STATUS)
             conn.execute(DDL_CREATE_INDEX_CREATED_AT)
+            try:
+                conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS channel VARCHAR;")
+                conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;")
+            except Exception:
+                pass
             conn.execute("CHECKPOINT;")
 
     def execute_write(

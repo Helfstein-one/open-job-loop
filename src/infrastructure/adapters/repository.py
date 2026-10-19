@@ -13,7 +13,7 @@ import json
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from src.infrastructure.adapters.database import DatabaseManager
-from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation
+from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation, ApplicationChannel
 
 
 def compute_job_hash(
@@ -101,13 +101,13 @@ class JobRepository:
             id, content_hash, title, company, location,
             raw_description, cleaned_description, status,
             fit_score, recommendation, evaluation, is_truncated,
-            token_count, url, source, error_message,
+            token_count, url, source, channel, application_log, error_message,
             created_at, updated_at
         ) VALUES (
             ?, ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
             ?, ?
         )
         ON CONFLICT (content_hash) DO NOTHING
@@ -135,6 +135,9 @@ class JobRepository:
         # Handle JobStatus enum or string
         status_val = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
 
+        # Handle ApplicationChannel enum or string
+        channel_val = job.channel.value if isinstance(job.channel, ApplicationChannel) else (str(job.channel) if job.channel else None)
+
         params = (
             job.id,
             job.content_hash,
@@ -151,6 +154,8 @@ class JobRepository:
             job.token_count,
             job.url,
             job.source,
+            channel_val,
+            job.application_log,
             job.error_message,
             created_at,
             updated_at,
@@ -165,7 +170,9 @@ class JobRepository:
         status: JobStatus,
         fit_score: Optional[int] = None,
         recommendation: Optional[Recommendation] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        channel: Optional[Any] = None,
+        application_log: Optional[str] = None,
     ) -> bool:
         """
         Update a job's lifecycle status, fit score, and recommendation with immediate flush.
@@ -176,12 +183,15 @@ class JobRepository:
             fit_score: Optional score (0-100).
             recommendation: Optional Recommendation enum (SHORTLIST or DISCARD).
             error_message: Optional error details.
+            channel: Optional ApplicationChannel used.
+            application_log: Optional application log or filled fields.
 
         Returns:
             True if the job record was found and updated, False otherwise.
         """
         status_val = status.value if isinstance(status, JobStatus) else str(status)
         rec_val = recommendation.value if isinstance(recommendation, Recommendation) else recommendation
+        channel_val = channel.value if isinstance(channel, ApplicationChannel) else (str(channel) if channel else None)
         now_utc = datetime.now(timezone.utc)
 
         query = """
@@ -190,11 +200,13 @@ class JobRepository:
             fit_score = COALESCE(?, fit_score),
             recommendation = COALESCE(?, recommendation),
             error_message = COALESCE(?, error_message),
+            channel = COALESCE(?, channel),
+            application_log = COALESCE(?, application_log),
             updated_at = ?
         WHERE id = ?
         RETURNING id;
         """
-        params = (status_val, fit_score, rec_val, error_message, now_utc, job_id)
+        params = (status_val, fit_score, rec_val, error_message, channel_val, application_log, now_utc, job_id)
         rows = await self._db.aexecute_write(query, params, checkpoint=True)
         return len(rows) > 0
 
@@ -220,6 +232,7 @@ class JobRepository:
         now_utc = datetime.now(timezone.utc)
         rec_val = job.recommendation.value if isinstance(job.recommendation, Recommendation) else job.recommendation
         status_val = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+        channel_val = job.channel.value if isinstance(job.channel, ApplicationChannel) else (str(job.channel) if job.channel else None)
 
         query = """
         UPDATE job_postings
@@ -230,6 +243,8 @@ class JobRepository:
             evaluation = ?,
             is_truncated = ?,
             token_count = ?,
+            channel = ?,
+            application_log = ?,
             error_message = ?,
             updated_at = ?
         WHERE id = ?
@@ -243,6 +258,8 @@ class JobRepository:
             eval_json,
             job.is_truncated,
             job.token_count,
+            channel_val,
+            job.application_log,
             job.error_message,
             now_utc,
             job.id,

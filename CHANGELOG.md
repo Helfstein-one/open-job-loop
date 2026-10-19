@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-10-19
+### Added
+- **Multi-Channel ATS Adapters**:
+  - `GreenhouseAdapter`: Automated form filling and CV upload for `boards.greenhouse.io` and `grnh.se`.
+  - `LeverAdapter`: Automated form filling, social profile links, and CV upload for `jobs.lever.co`.
+  - `AshbyAdapter`: Form filling and custom question answering for `jobs.ashbyhq.com`.
+  - `ATSRouter`: Automatic ATS detection from job URLs and redirection handling from external LinkedIn apply buttons.
+- **Real-Time Active Learning Service**:
+  - `ActiveLearningService`: Detects low confidence (<70%) or unmapped screening questions in real time.
+  - Interactive CLI prompt for candidate input during application filling.
+  - Instant vectorization and persistence of verified answers into DuckDB VSS (`user_profile` table) for continuous reinforcement.
+- **Base Resume PDF Attachment**:
+  - Configurable `--resume-path` / `-r` parameter in `apply` and `run` commands (default: `data/resume.pdf`).
+  - Automatic file validation and attachment in Playwright file inputs across all ATS platforms.
+- **Schema & Tracking Enhancements**:
+  - `ApplicationChannel` enum (`LINKEDIN_EASY_APPLY`, `GREENHOUSE`, `LEVER`, `ASHBY`, `EXTERNAL_MANUAL`).
+  - Automatic DuckDB migrations for `channel`, `application_log`, and `error_message` columns in `job_postings`.
+  - Added new unit, integration, and E2E tests bringing the test suite to 270+ passing tests.
+
 ## [2.0.0] - 2026-10-19
 ### Added
 - **Multi-Agent Architecture**:

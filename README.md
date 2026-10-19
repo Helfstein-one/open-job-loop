@@ -14,9 +14,9 @@ O **OPEN-JOB-LOOP** é uma ferramenta de automação de carreira ("unfair advant
 
 ---
 
-## 🤖 Arquitetura Multi-Agente
+## 🤖 Arquitetura Multi-Agente & Multi-Canal
 
-O sistema opera através de 4 agentes especializados colaborando com memória compartilhada no **DuckDB VSS**:
+O sistema opera através de agentes especializados colaborando com memória compartilhada no **DuckDB VSS** e suporte nativo a múltiplos canais de candidatura:
 
 ```mermaid
 flowchart TD
@@ -35,18 +35,26 @@ flowchart TD
         F -->|"Score 0-100 + Rationale"| G["Fila SHORTLISTED"]
     end
 
-    subgraph Application ["4. Candidatura Contextualizada"]
-        G --> H["FormFiller Agent (Playwright)"]
-        C -.->|"Padrões do Candidato (RAG)"| H
-        F -.->|"Justificativa do Evaluator"| H
-        H -->|"Preenchimento Supervisionado / Envio"| I["Status: APPLIED / APPLIED_DRY_RUN"]
+    subgraph Application ["4. Candidatura Multi-Canal & Active Learning"]
+        G --> Router{"Roteador de Canal"}
+        Router -->|"Easy Apply"| FormFiller["LinkedIn Easy Apply"]
+        Router -->|"Greenhouse"| GH["Greenhouse Adapter"]
+        Router -->|"Lever"| LV["Lever Adapter"]
+        Router -->|"Ashby"| AS["Ashby Adapter"]
+
+        FormFiller & GH & LV & AS --> AL{"Active Learning (Confiança < 70%?)"}
+        AL -->|"Inédito / Dúvida"| UserPrompt["Pergunta ao Candidato no CLI"]
+        UserPrompt -->|"Persistência Imediata"| C
+        AL -->|"Confiança Alta"| Submit["Preenchimento + Upload CV Base + Envio"]
+        Submit --> Result["Status: APPLIED / APPLIED_DRY_RUN"]
     end
 ```
 
 1. **Profiler Agent**: Ingesta o perfil do LinkedIn (URL via Playwright ou PDF exportado), formula a especificação da vaga-alvo ideal, conduz a entrevista interativa adaptativa (*grill-me*) e vetoriza o perfil no DuckDB VSS.
 2. **Scout Agent**: Conecta-se ao Model Context Protocol (MCP) do LinkedIn para garimpar vagas reais no mercado.
 3. **Evaluator Agent**: Avalia cada vaga contra o background do candidato usando Llama 3.2 local via Instructor, gerando *fit score* (0-100), justificativa técnica e skills compatíveis.
-4. **FormFiller Agent**: Robô Playwright que navega pelas telas do Easy Apply, consulta o DuckDB VSS e combina a análise do Evaluator para responder perguntas discursivas e quantitativas do recrutador de forma personalizada.
+4. **FormFiller & ATS Adapters**: Módulos Playwright especializados para **LinkedIn Easy Apply**, **Greenhouse**, **Lever** e **Ashby**, preenchendo formulários, anexando o currículo base em PDF e respondendo a perguntas discursivas.
+5. **Active Learning Service**: Detecta perguntas inéditas ou com confiança < 70% durante o preenchimento, consulta o usuário pontualmente no terminal e salva a resposta no DuckDB VSS para aprendizado contínuo.
 
 ---
 
@@ -121,13 +129,14 @@ python -m src.presentation.cli stats
 ```text
 src/
 ├── domain/                      # Entidades de Domínio e Schemas Pydantic
-│   └── models.py                # JobPosting, CandidateProfile, MatchEvaluation
+│   └── models.py                # JobPosting, CandidateProfile, ApplicationChannel
 ├── application/                 # Casos de Uso e Portas
 │   ├── ports/                   # Interfaces abstratas
 │   └── use_cases/               # Lógica de aplicação
 │       ├── onboard.py           # Profiler Agent & Entrevista Grill-Me
 │       ├── profile.py           # ProfileManager & DuckDB VSS Engine
-│       ├── auto_apply.py        # FormFiller Agent (Playwright Easy Apply)
+│       ├── auto_apply.py        # FormFiller Agent Multi-Canal
+│       ├── active_learning.py   # ActiveLearningService (perguntas em tempo real)
 │       ├── pipeline.py          # Closed-loop DAG Pipeline
 │       ├── harness.py           # LocalLoopGuard & Circuit Breaker
 │       └── truncator.py         # TextTruncator & Sanitizador
@@ -136,7 +145,13 @@ src/
 │       ├── repository.py        # Repositório DuckDB
 │       ├── llm_evaluator.py     # Avaliador LLM (Instructor + Ollama)
 │       ├── mcp_client.py        # Cliente MCP LinkedIn
-│       └── mcp_mock_client.py   # Mock MCP para testes offline
+│       ├── mcp_mock_client.py   # Mock MCP para testes offline
+│       └── ats/                 # Adaptadores de ATS Externos
+│           ├── base.py          # BaseATSAdapter & FormField
+│           ├── greenhouse.py    # Greenhouse Adapter
+│           ├── lever.py         # Lever Adapter
+│           ├── ashby.py         # Ashby Adapter
+│           └── router.py        # Roteamento e Detecção de Canal
 └── presentation/                # Camada de Interface CLI
     ├── cli.py                   # Typer CLI principal
     ├── ui_console.py            # Rich Live Dashboard
@@ -147,16 +162,16 @@ src/
 
 ## 🧪 Testes Automatizados
 
-O projeto conta com **199 testes automatizados** cobrindo Unit, Integration e End-to-End:
+O projeto conta com **270+ testes automatizados** cobrindo Unit, Integration e End-to-End:
 
 ```bash
 # Executar a suite completa
 pytest tests/unit/ tests/integration/ tests/e2e/
 ```
 
-- **Unitários (`tests/unit/`)**: Modelos, banco DuckDB, avaliador LLM, cliente MCP, truncador de texto, ProfileManager e ProfilerAgent.
-- **Integração (`tests/integration/`)**: Execução de comandos Typer CLI (`onboard`, `profile`, `apply`, `run`, `stats`), harness e pipeline.
-- **End-to-End (`tests/e2e/`)**: Fluxo Playwright ponta a ponta simulando formulário real do Easy Apply, inferência ao vivo com Ollama local e testes de resiliência a timeouts.
+- **Unitários (`tests/unit/`)**: Modelos, banco DuckDB, avaliador LLM, cliente MCP, truncador de texto, ProfileManager, ProfilerAgent, ActiveLearningService e ATS Adapters.
+- **Integração (`tests/integration/`)**: Execução de comandos Typer CLI (`onboard`, `profile`, `apply`, `run`, `stats`), harness, pipeline e preenchimento de formulários Greenhouse, Lever e Ashby com Playwright.
+- **End-to-End (`tests/e2e/`)**: Fluxo Playwright ponta a ponta simulando Easy Apply e ATS externos com persistência em DuckDB, inferência ao vivo com Ollama local e testes de resiliência a timeouts.
 
 ---
 

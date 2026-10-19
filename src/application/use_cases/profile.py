@@ -222,32 +222,44 @@ class ProfileManager:
             results.append({"category": row[0], "content": row[1], "distance": float(row[2])})
         return results
 
-    async def synthesize_answer(
+    async def add_chunk(self, category: str, content: str) -> None:
+        """Insere um novo bloco de conhecimento ou resposta de Active Learning no DuckDB VSS."""
+        self.initialize_schema()
+        emb = await self.get_embedding(content)
+        conn = self._get_connection()
+        conn.execute(
+            "INSERT INTO user_profile (category, content, embedding) VALUES (?, ?, ?::FLOAT[768])",
+            (category, content, emb),
+        )
+        conn.execute("CHECKPOINT;")
+        conn.close()
+        logger.info(f"Novo fragmento [{category}] indexado no DuckDB VSS com sucesso.")
+
+    async def synthesize_answer_with_confidence(
         self,
         question: str,
         max_words: int = 30,
         job_context: Optional[Dict[str, Any]] = None,
-    ) -> str:
+    ) -> Tuple[str, float]:
         """
-        Consulta os padrões do candidato via RAG no DuckDB VSS e gera uma resposta
-        curta, objetiva e adequada para preenchimento de formulário, enriquecida
-        com o contexto multi-agente da vaga (análise do Evaluator).
+        Consulta DuckDB VSS e gera resposta com estimativa de confiança [0.0 a 1.0].
         """
         matches = await self.search_profile(question, limit=2)
         if not matches:
-            return "N/A"
+            return "N/A", 0.0
+
+        best_distance = matches[0].get("distance", 1.0)
+        confidence = max(0.0, min(1.0, 1.0 - best_distance))
 
         context_str = "\n".join([f"[{m['category']}] {m['content']}" for m in matches])
 
         # Se estiver em modo mock ou sem Ollama, extrai de forma heurística limpa
         if self.mock_mode:
-            # Verifica se o contexto já possui o padrão de Answer: ...
             for m in matches:
                 if "Answer:" in m["content"]:
                     ans_part = m["content"].split("Answer:", 1)[1].strip()
-                    return ans_part[:100]
-            # Fallback mock: retorna o início do melhor trecho
-            return matches[0]["content"][:60]
+                    return ans_part[:100], confidence
+            return matches[0]["content"][:60], confidence
 
         job_info_str = ""
         if job_context:
@@ -259,7 +271,7 @@ class ProfileManager:
             )
 
         prompt = (
-            f"You are an assistant filling out a job application form on LinkedIn for the candidate.\n"
+            f"You are an assistant filling out a job application form on LinkedIn/ATS for the candidate.\n"
             f"Context from the candidate's profile and verified background:\n"
             f"{context_str}\n"
             f"{job_info_str}\n"
@@ -283,15 +295,31 @@ class ProfileManager:
                 temperature=0.0,
                 max_tokens=60,
             )
-            answer = resp.choices[0].message.content.strip()
-            # Remove any wrapping quotes or backticks
-            return answer.strip('"\'`')
+            answer = resp.choices[0].message.content.strip().strip('"\'`')
+            return answer, confidence
         except Exception as e:
             logger.warning(f"Erro ao sintetizar resposta com LLM ({e}). Usando contexto direto.")
             for m in matches:
                 if "Answer:" in m["content"]:
-                    return m["content"].split("Answer:", 1)[1].strip()
-            return matches[0]["content"][:80]
+                    return m["content"].split("Answer:", 1)[1].strip(), confidence
+            return matches[0]["content"][:80], confidence
+
+    async def synthesize_answer(
+        self,
+        question: str,
+        max_words: int = 30,
+        job_context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Consulta os padrões do candidato via RAG no DuckDB VSS e gera uma resposta
+        curta, objetiva e adequada para preenchimento de formulário.
+        """
+        answer, _ = await self.synthesize_answer_with_confidence(
+            question=question,
+            max_words=max_words,
+            job_context=job_context,
+        )
+        return answer
 
     def list_chunks(self) -> List[Dict]:
         """Lista os chunks atualmente armazenados no banco."""

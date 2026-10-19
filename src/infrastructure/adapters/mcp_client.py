@@ -8,6 +8,7 @@ and McpJobClient stdio transport client.
 
 
 import abc
+import asyncio
 import json
 import logging
 import types
@@ -352,8 +353,8 @@ class McpJobClient(BaseJobIngestionClient):
                 "max_pages": kwargs.get("max_pages", max(1, math.ceil(limit / 10)))
             }
 
-        import asyncio
-        max_attempts = 120
+        max_attempts = 12 if self.tool_name == "search_jobs" else 1
+        result = None
         for attempt in range(max_attempts):
             try:
                 result = await self._session.call_tool(
@@ -363,9 +364,9 @@ class McpJobClient(BaseJobIngestionClient):
                 )
             except Exception as exc:
                 if "timed out" in str(exc).lower():
-                    logger.warning("Tool execution timed out, retrying in 5s...")
-                    await asyncio.sleep(5)
-                    continue
+                    raise McpToolExecutionError(
+                        f"Tool '{self.tool_name}' execution timed out: {exc}"
+                    ) from exc
                 raise McpToolExecutionError(
                     f"Tool '{self.tool_name}' execution failed: {exc}"
                 ) from exc
@@ -380,8 +381,8 @@ class McpJobClient(BaseJobIngestionClient):
                 
                 msg_lower = err_msg.lower()
                 if "login is still in progress" in msg_lower or "downloading the patchright chromium browser" in msg_lower or "keychain prompt" in msg_lower:
-                    logger.warning(f"MCP Plugin waiting for setup/login. Retrying in 10s... ({attempt+1}/{max_attempts}) | MSG: {err_msg}")
-                    await asyncio.sleep(10)
+                    logger.warning(f"MCP Plugin waiting for setup/login. Retrying in 5s... ({attempt+1}/{max_attempts}) | MSG: {err_msg}")
+                    await asyncio.sleep(5)
                     continue
                     
                 raise McpToolExecutionError(
