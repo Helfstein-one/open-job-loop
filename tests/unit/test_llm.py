@@ -41,7 +41,7 @@ def is_ollama_available(base_url: str = "http://localhost:11434") -> bool:
                 return False
             data = json.loads(resp.read().decode("utf-8"))
             model_names = [m.get("name", "") for m in data.get("models", [])]
-            return any("llama3.2" in name for name in model_names)
+            return any(name.startswith("llama3.2:3b") or name.startswith("llama3.2:latest") for name in model_names)
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
         return False
 

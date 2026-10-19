@@ -42,7 +42,7 @@ def is_ollama_model_available(
             data = json.loads(resp.read().decode("utf-8"))
             models = data.get("models", [])
             names = [m.get("name", "") for m in models]
-            return any(model_name in name or "llama3.2" in name for name in names)
+            return any(model_name in name for name in names)
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
         return False
 

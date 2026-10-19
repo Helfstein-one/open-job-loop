@@ -1,34 +1,68 @@
 import os
-import asyncio
+import math
+import hashlib
 import logging
-from typing import List, Dict
+from pathlib import Path
+from typing import List, Dict, Tuple, Optional, Any
 import duckdb
+import yaml
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
+
+def compute_mock_embedding(text: str, dim: int = 768) -> List[float]:
+    """
+    Deterministic pseudo-semantic embedding for offline testing and fallback.
+    Maps word hashes into a fixed-dimension vector with L2 normalization.
+    """
+    vec = [0.001] * dim
+    words = text.lower().replace("?", " ").replace(",", " ").replace(".", " ").replace(":", " ").split()
+    for w in words:
+        if len(w) < 2:
+            continue
+        h = int(hashlib.md5(w.encode("utf-8")).hexdigest(), 16)
+        vec[h % dim] += 2.0
+        # Also spread into secondary slot for smoother density
+        vec[(h >> 8) % dim] += 1.0
+
+    norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+    return [round(x / norm, 6) for x in vec]
+
+
 class ProfileManager:
     """
-    Gerencia o currículo e dados da entrevista do usuário, transformando em Embeddings 
-    e salvando no DuckDB VSS para o bot Playwright consultar.
+    Gerencia o perfil do candidato, dados profissionais e respostas padrão.
+    Vetoriza trechos semânticos no DuckDB VSS para consulta em RAG durante auto-apply.
     """
-    def __init__(self, db_path: str = "open_job_loop.duckdb", embedding_model: str = "nomic-embed-text"):
+
+    def __init__(
+        self,
+        db_path: str = "open_job_loop.duckdb",
+        embedding_model: str = "nomic-embed-text",
+        llm_model: str = "llama3.2:3b",
+        mock_mode: bool = False,
+        base_url: Optional[str] = None,
+    ):
         self.db_path = db_path
         self.embedding_model = embedding_model
-        # Usando a API compatível com OpenAI fornecida pelo Ollama local
-        self.client = AsyncOpenAI(base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"), api_key="ollama")
-        
-    def _get_connection(self):
+        self.llm_model = llm_model
+        self.mock_mode = mock_mode
+        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        self.client = AsyncOpenAI(base_url=self.base_url, api_key="ollama")
+
+    def _get_connection(self) -> duckdb.DuckDBPyConnection:
+        parent = Path(self.db_path).parent
+        if parent and not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
         conn = duckdb.connect(self.db_path, read_only=False)
         conn.execute("INSTALL vss; LOAD vss;")
         conn.execute("SET hnsw_enable_experimental_persistence=true;")
         return conn
 
-    def initialize_schema(self):
-        """Cria as tabelas e o índice VSS para busca vetorial."""
+    def initialize_schema(self) -> None:
+        """Cria a tabela de perfil com índice vetorial HNSW."""
         conn = self._get_connection()
-        # A extensão VSS do DuckDB usa FLOAT[N] para arrays de tamanho fixo
-        # nomic-embed-text usa 768 dimensões
         conn.execute("""
             CREATE TABLE IF NOT EXISTS user_profile (
                 id UUID DEFAULT uuid(),
@@ -37,9 +71,6 @@ class ProfileManager:
                 embedding FLOAT[768]
             );
         """)
-        
-        # Criação do índice HNSW para buscas ultra rápidas
-        # Dropamos se existir para garantir atualização
         try:
             conn.execute("DROP INDEX IF EXISTS idx_profile_emb;")
             conn.execute("""
@@ -47,42 +78,137 @@ class ProfileManager:
                 WITH (metric = 'cosine');
             """)
         except Exception as e:
-            logger.warning(f"Aviso ao criar índice HNSW: {e}")
-            
-        conn.close()
+            logger.warning(f"Aviso ao inicializar índice HNSW VSS: {e}")
+        finally:
+            conn.close()
 
     async def get_embedding(self, text: str) -> List[float]:
-        """Chama o Ollama local para gerar o vetor do texto."""
-        response = await self.client.embeddings.create(
-            model=self.embedding_model,
-            input=text
-        )
-        return response.data[0].embedding
+        """Obtém vetor de embedding (Ollama nomic-embed-text ou mock determinístico)."""
+        if self.mock_mode:
+            return compute_mock_embedding(text)
 
-    async def add_resume_chunk(self, category: str, content: str):
-        """Adiciona um trecho de experiência ou habilidade no banco."""
-        emb = await self.get_embedding(content)
-        
+        try:
+            response = await self.client.embeddings.create(
+                model=self.embedding_model,
+                input=text,
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.warning(f"Falha ao chamar Ollama embedding ({e}). Usando fallback mock.")
+            return compute_mock_embedding(text)
+
+    def chunk_profile(self, data: dict) -> List[Tuple[str, str]]:
+        """Divide o perfil do candidato em blocos semânticos etiquetados por categoria."""
+        chunks: List[Tuple[str, str]] = []
+
+        cand = data.get("candidate", {})
+        if cand:
+            bio_text = (
+                f"Candidate Name: {cand.get('name', '')}. "
+                f"Email: {cand.get('email', '')}. "
+                f"Phone: {cand.get('phone', '')}. "
+                f"Location: {cand.get('location', '')}. "
+                f"Title: {cand.get('title', '')}. "
+                f"Years of Experience: {cand.get('years_of_experience', '')}. "
+                f"LinkedIn: {cand.get('linkedin_url', '')}."
+            )
+            chunks.append(("personal_bio", bio_text.strip()))
+
+        summary = data.get("summary", "")
+        if summary:
+            chunks.append(("professional_summary", str(summary).strip()))
+
+        auth = data.get("work_authorization", {})
+        if auth:
+            auth_text = (
+                f"Work Authorization: "
+                f"Authorized in Brazil: {auth.get('authorized_in_brazil')}. "
+                f"Authorized in US: {auth.get('authorized_in_us')}. "
+                f"Requires US Visa Sponsorship: {auth.get('requires_sponsorship_us')}. "
+                f"Requires EU Visa Sponsorship: {auth.get('requires_sponsorship_eu')}."
+            )
+            chunks.append(("work_authorization", auth_text))
+
+        prefs = data.get("preferences", {})
+        if prefs:
+            pref_text = (
+                f"Compensation and Work Preferences: "
+                f"Expected Salary USD: {prefs.get('expected_salary_usd')}. "
+                f"Expected Salary BRL: {prefs.get('expected_salary_brl')}. "
+                f"Notice Period / Availability: {prefs.get('notice_period')}. "
+                f"Work Model Preference: {prefs.get('work_preference')}."
+            )
+            chunks.append(("compensation_preferences", pref_text))
+
+        skills = data.get("skills", {})
+        if skills:
+            skill_lines = []
+            for group, items in skills.items():
+                if isinstance(items, list):
+                    skill_lines.append(f"{group.replace('_', ' ').title()}: {', '.join(items)}")
+                else:
+                    skill_lines.append(f"{group}: {items}")
+            chunks.append(("technical_skills", "Candidate Technical Skills: " + " | ".join(skill_lines)))
+
+        experiences = data.get("experiences", [])
+        if isinstance(experiences, list):
+            for exp in experiences:
+                if isinstance(exp, dict):
+                    exp_text = (
+                        f"Experience: {exp.get('role')} at {exp.get('company')} ({exp.get('period')}). "
+                        f"Details: {exp.get('description', '')}"
+                    )
+                    chunks.append(("work_experience", exp_text.strip()))
+
+        std_answers = data.get("standard_answers", [])
+        if isinstance(std_answers, list):
+            for item in std_answers:
+                if isinstance(item, dict):
+                    q = item.get("question", "")
+                    a = item.get("answer", "")
+                    chunks.append(("standard_qa", f"Question: {q} Answer: {a}"))
+
+        return chunks
+
+    async def sync_from_yaml(self, yaml_path: str) -> int:
+        """Lê profile.yaml, limpa a tabela de perfil e insere todos os chunks vetorizados no VSS."""
+        path = Path(yaml_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Arquivo de perfil '{yaml_path}' não encontrado.")
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        chunks = self.chunk_profile(data)
+        if not chunks:
+            logger.warning(f"Nenhum chunk semântico gerado a partir de {yaml_path}")
+            return 0
+
+        self.initialize_schema()
         conn = self._get_connection()
-        # Inserimos o vetor castado corretamente para o array float do DuckDB
-        conn.execute(
-            "INSERT INTO user_profile (category, content, embedding) VALUES (?, ?, ?::FLOAT[768])",
-            (category, content, emb)
-        )
+
+        # Limpa os dados anteriores para garantir sincronização idempotente
+        conn.execute("DELETE FROM user_profile;")
+
+        count = 0
+        for category, content in chunks:
+            emb = await self.get_embedding(content)
+            conn.execute(
+                "INSERT INTO user_profile (category, content, embedding) VALUES (?, ?, ?::FLOAT[768])",
+                (category, content, emb),
+            )
+            count += 1
+
         conn.execute("CHECKPOINT;")
         conn.close()
-        logger.info(f"Chunk '{category}' adicionado ao VSS com sucesso.")
+        logger.info(f"Sincronizados {count} blocos de perfil com sucesso no DuckDB VSS.")
+        return count
 
     async def search_profile(self, query: str, limit: int = 3) -> List[Dict]:
-        """
-        Dada uma pergunta do formulário do LinkedIn (ex: 'How many years of Python?'),
-        busca no banco a parte do currículo que responde isso.
-        """
+        """Busca os trechos do perfil mais relevantes para a pergunta dada com base em distância cosseno."""
         query_emb = await self.get_embedding(query)
-        
         conn = self._get_connection()
-        # VSS no DuckDB: array_distance ou list_cosine_distance dependendo da versão
-        # Com o index criado, podemos usar a métrica HNSW com ORDER BY
+
         res = conn.execute("""
             SELECT category, content, list_cosine_distance(embedding, ?::FLOAT[768]) as dist
             FROM user_profile
@@ -90,15 +216,86 @@ class ProfileManager:
             LIMIT ?;
         """, (query_emb, limit)).fetchall()
         conn.close()
-        
+
         results = []
         for row in res:
-            results.append({"category": row[0], "content": row[1], "distance": row[2]})
+            results.append({"category": row[0], "content": row[1], "distance": float(row[2])})
         return results
 
-if __name__ == "__main__":
-    # Teste rápido de sanidade
-    logging.basicConfig(level=logging.INFO)
-    manager = ProfileManager()
-    manager.initialize_schema()
-    print("Schema do VSS inicializado com sucesso!")
+    async def synthesize_answer(
+        self,
+        question: str,
+        max_words: int = 30,
+        job_context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Consulta os padrões do candidato via RAG no DuckDB VSS e gera uma resposta
+        curta, objetiva e adequada para preenchimento de formulário, enriquecida
+        com o contexto multi-agente da vaga (análise do Evaluator).
+        """
+        matches = await self.search_profile(question, limit=2)
+        if not matches:
+            return "N/A"
+
+        context_str = "\n".join([f"[{m['category']}] {m['content']}" for m in matches])
+
+        # Se estiver em modo mock ou sem Ollama, extrai de forma heurística limpa
+        if self.mock_mode:
+            # Verifica se o contexto já possui o padrão de Answer: ...
+            for m in matches:
+                if "Answer:" in m["content"]:
+                    ans_part = m["content"].split("Answer:", 1)[1].strip()
+                    return ans_part[:100]
+            # Fallback mock: retorna o início do melhor trecho
+            return matches[0]["content"][:60]
+
+        job_info_str = ""
+        if job_context:
+            job_info_str = (
+                f"\nJob & Evaluator Context:\n"
+                f"- Applying for: {job_context.get('title', 'Unknown')} at {job_context.get('company', 'Unknown')}\n"
+                f"- Candidate Match Strengths: {job_context.get('matched_skills', '')}\n"
+                f"- Evaluator Rationale: {job_context.get('rationale', '')}\n"
+            )
+
+        prompt = (
+            f"You are an assistant filling out a job application form on LinkedIn for the candidate.\n"
+            f"Context from the candidate's profile and verified background:\n"
+            f"{context_str}\n"
+            f"{job_info_str}\n"
+            f"Form Question: {question}\n\n"
+            f"Instructions:\n"
+            f"- Output ONLY the direct answer suitable for the form input field.\n"
+            f"- If the question asks for a number (e.g., years of experience), output ONLY the numeric value or short phrase (e.g. '10').\n"
+            f"- If it's a Yes/No question, output ONLY 'Yes' or 'No'.\n"
+            f"- If it asks for compensation, output the concise range matching the candidate's preferences.\n"
+            f"- If open-ended (e.g. 'Why this role?'), use the candidate's background and match strengths to write a strong 1-2 sentence response.\n"
+            f"- Keep it concise (maximum {max_words} words). Zero conversational filler."
+        )
+
+        try:
+            resp = await self.client.chat.completions.create(
+                model=self.llm_model,
+                messages=[
+                    {"role": "system", "content": "You are a concise form-filling assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+                max_tokens=60,
+            )
+            answer = resp.choices[0].message.content.strip()
+            # Remove any wrapping quotes or backticks
+            return answer.strip('"\'`')
+        except Exception as e:
+            logger.warning(f"Erro ao sintetizar resposta com LLM ({e}). Usando contexto direto.")
+            for m in matches:
+                if "Answer:" in m["content"]:
+                    return m["content"].split("Answer:", 1)[1].strip()
+            return matches[0]["content"][:80]
+
+    def list_chunks(self) -> List[Dict]:
+        """Lista os chunks atualmente armazenados no banco."""
+        conn = self._get_connection()
+        res = conn.execute("SELECT category, content FROM user_profile ORDER BY category").fetchall()
+        conn.close()
+        return [{"category": r[0], "content": r[1]} for r in res]

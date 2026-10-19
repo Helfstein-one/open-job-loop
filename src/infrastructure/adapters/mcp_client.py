@@ -13,7 +13,8 @@ import logging
 import types
 import uuid
 from contextlib import AsyncExitStack
-from typing import Any, Self
+from typing import Any
+from typing_extensions import Self
 
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client

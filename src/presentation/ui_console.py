@@ -14,9 +14,10 @@ Provides:
 import abc
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 from types import TracebackType
-from typing import Any, Self
+from typing import Any
+from typing_extensions import Self
 
 from rich.align import Align
 from rich.console import Console, Group
@@ -465,7 +466,7 @@ class HeadlessPipelineUI(BasePipelineUI):
     """
 
     def start(self) -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         self.console.print(
             f"[dim][{now}][/] [bold cyan][HEADLESS][/] OpenJobLoop started "
             f"(target: {self.state.limit} jobs, threshold: {self.state.threshold}/100)"
@@ -481,20 +482,20 @@ class HeadlessPipelineUI(BasePipelineUI):
         status: str,
         detail: str | None = None,
     ) -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         det = f" - {detail}" if detail else ""
         if status in ("RUNNING", "DONE", "TIMEOUT", "ERROR"):
             self.console.print(f"[dim][{now}][/] [cyan][STAGE {stage_idx}][/] {stage_name}: {status}{det}")
 
     def on_job_start(self, job: JobPosting, iteration: int, max_iterations: int) -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         self.console.print(
             f"[dim][{now}][/] [bold blue][JOB {iteration}/{max_iterations}][/] "
             f"Ingested '{job.title}' at '{job.company}'"
         )
 
     def on_job_triaged(self, job: JobPosting, evaluation: MatchEvaluation) -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         rec = evaluation.recommendation.value
         style = "bold green" if rec == "SHORTLIST" else "dim yellow"
         self.console.print(
@@ -506,7 +507,7 @@ class HeadlessPipelineUI(BasePipelineUI):
         self.state.metrics.update(metrics)
 
     def on_job_skipped(self, reason: str, job: JobPosting | None = None) -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         job_info = f" ('{job.title}')" if job else ""
         self.console.print(f"[dim][{now}][/] [yellow][SKIPPED][/]{job_info} {reason}")
 
@@ -514,7 +515,7 @@ class HeadlessPipelineUI(BasePipelineUI):
         self.state.metrics.update(metrics)
 
     def log_event(self, message: str, level: str = "info") -> None:
-        now = datetime.now(UTC).strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         self.console.print(f"[dim][{now}][/] [cyan][LOG][/] {message}")
 
 

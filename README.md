@@ -8,148 +8,158 @@
 \____/_/   /_____/_/ |_/   \____/\____/\____/_____/   /_____/\____/\____/_/
 ```
 
-O **OPEN-JOB-LOOP** evoluiu de uma CLI simples para um verdadeiro **Agente Autônomo de Carreira Pessoal**. Ele executa um pipeline complexo (Busca - Triagem - Deduplicação - Preenchimento de Formulários) para garantir que você só foque nas vagas de alto nível técnico ("Fit Score"). Tudo isso encapsulado em Microserviços (Docker/Podman) e acessível via chat interativo (Open WebUI).
+> **Agente Autônomo e Colaborativo de Busca & Candidatura de Vagas com Modelos Locais, Arquitetura Hexagonal, DuckDB VSS e Multi-Agentes.**
 
-## 🚀 Novidades da V2
-- **Hexagonal Architecture (Ports & Adapters)**: Código rigorosamente estruturado com SOLID (`domain/`, `application/`, `infrastructure/`, `presentation/`).
-- **Automação "Easy Apply"**: Robô integrado ao Playwright que preenche os formulários do LinkedIn de forma invisível.
-- **RAG & Currículo Vetorial**: Utiliza `DuckDB VSS` para armazenar o seu currículo em memória vetorial, permitindo que a IA redija respostas perfeitas e customizadas para as perguntas abertas do recrutador na hora de aplicar.
-- **Microserviços (Docker/Podman)**: Infraestrutura isolada composta por 3 containers (`open-webui`, `ollama`, `job-bot`).
-- **API Híbrida**: O core é ativado tanto por CLI (Typer) quanto por Endpoints REST (FastAPI).
+O **OPEN-JOB-LOOP** é uma ferramenta de automação de carreira ("unfair advantage") 100% orientada a CLI, sem dependência de interfaces web pesadas. Ele executa em loops fechados para descobrir vagas reais no LinkedIn, deduplicar registros, avaliar compatibilidade técnica com LLMs locais e preencher formulários do LinkedIn Easy Apply de forma personalizada utilizando contexto multi-agente e RAG vetorial.
 
 ---
 
-## 🏗 Arquitetura & Jornada do Agente
+## 🤖 Arquitetura Multi-Agente
 
-O fluxo de funcionamento do projeto foi desenhado para ser totalmente autônomo. Abaixo você confere o caminho que uma vaga percorre desde a descoberta até a candidatura final:
+O sistema opera através de 4 agentes especializados colaborando com memória compartilhada no **DuckDB VSS**:
 
 ```mermaid
-sequenceDiagram
-    participant User as 🧑‍💻 Você
-    participant UI as 💬 Open WebUI
-    participant API as ⚙️ FastAPI (job-bot)
-    participant MCP as 🔍 LinkedIn MCP
-    participant Llama as 🧠 Ollama (Llama 3.2)
-    participant DB as 💾 DuckDB (VSS)
-    participant Bot as 🤖 Playwright
-    
-    User->>UI: "Aplique para vagas de Python"
-    UI->>API: POST /start {keywords: "Python"}
-    
-    rect rgb(30, 30, 30)
-        Note right of API: 1. DESCOBERTA E TRIAGEM
-        API->>MCP: Buscar vagas no LinkedIn
-        MCP-->>API: Lista de Vagas Brutas
-        API->>DB: Checa Hash (Deduplicação)
-        API->>Llama: Prompt: Avalie as vagas inéditas
-        Llama-->>API: Retorna "Fit Score" (0-100)
-        API->>DB: Salva vagas boas como SHORTLISTED
+flowchart TD
+    subgraph Ingestion ["1. Onboarding & Estratégia"]
+        A["LinkedIn Profile (URL ou PDF)"] --> B["Profiler Agent (Estrategista)"]
+        B -->|"Formula Perfil Alvo + Entrevista Grill-Me"| C["DuckDB VSS (data/profile.yaml)"]
     end
-    
-    rect rgb(30, 30, 50)
-        Note right of API: 2. AUTO-APPLY (Assíncrono)
-        API->>Bot: Inicia worker de aplicação
-        Bot->>DB: Puxa vagas SHORTLISTED
-        Bot->>MCP: Navega invisível (linkedin_state.json)
-        Bot->>Bot: Clica em "Easy Apply" e extrai perguntas
-        Bot->>DB: Busca semântica (RAG) da resposta ideal no seu currículo VSS
-        Bot->>Bot: Preenche e Clica em "Submit"
-        Bot->>DB: Atualiza status para APPLIED
+
+    subgraph Discovery ["2. Garimpo & Deduplicação"]
+        C -->|"Keywords & Senioridade"| D["Scout Agent (Caçador LinkedIn MCP)"]
+        D -->|"Ingestão & Hash SHA-256"| E["Banco de Vagas Inéditas"]
     end
-    
-    UI->>API: GET /report
-    API-->>UI: Retorna JSON consolidado
-    UI-->>User: "Relatório: 15 vagas aplicadas com sucesso!"
+
+    subgraph Triage ["3. Avaliação Técnica (Local LLM)"]
+        E --> F["Evaluator Agent (Llama 3.2:3b)"]
+        F -->|"Score 0-100 + Rationale"| G["Fila SHORTLISTED"]
+    end
+
+    subgraph Application ["4. Candidatura Contextualizada"]
+        G --> H["FormFiller Agent (Playwright)"]
+        C -.->|"Padrões do Candidato (RAG)"| H
+        F -.->|"Justificativa do Evaluator"| H
+        H -->|"Preenchimento Supervisionado / Envio"| I["Status: APPLIED / APPLIED_DRY_RUN"]
+    end
 ```
 
-### Topologia de Containers (Podman/Docker)
+1. **Profiler Agent**: Ingesta o perfil do LinkedIn (URL via Playwright ou PDF exportado), formula a especificação da vaga-alvo ideal, conduz a entrevista interativa adaptativa (*grill-me*) e vetoriza o perfil no DuckDB VSS.
+2. **Scout Agent**: Conecta-se ao Model Context Protocol (MCP) do LinkedIn para garimpar vagas reais no mercado.
+3. **Evaluator Agent**: Avalia cada vaga contra o background do candidato usando Llama 3.2 local via Instructor, gerando *fit score* (0-100), justificativa técnica e skills compatíveis.
+4. **FormFiller Agent**: Robô Playwright que navega pelas telas do Easy Apply, consulta o DuckDB VSS e combina a análise do Evaluator para responder perguntas discursivas e quantitativas do recrutador de forma personalizada.
 
-```mermaid
-graph TD
-    subgraph Host [Seu Computador / Mac]
-        dir1[./data/open_job_loop.duckdb]
-        dir2[./data/linkedin_state.json]
-    end
+---
 
-    subgraph Podman Network [Rede Isolada]
-        UI[ghcr.io/open-webui]:::ui
-        OLLAMA[ollama/ollama:latest]:::llm
-        BOT[open-job-loop:job-bot]:::bot
-        
-        UI <-->|HTTP: 11434| OLLAMA
-        UI <-->|HTTP: 8000| BOT
-        BOT <-->|HTTP: 11434| OLLAMA
-    end
-    
-    Host -.->|Volume Compartilhado| BOT
-    
-    classDef ui fill:#4e79a7,color:#fff,stroke:#333
-    classDef llm fill:#e15759,color:#fff,stroke:#333
-    classDef bot fill:#59a14f,color:#fff,stroke:#333
+## ⚙️ Pré-Requisitos
+
+1. **Python 3.10+** (recomendado Python 3.12).
+2. **Ollama** rodando localmente (`http://localhost:11434`):
+   ```bash
+   ollama pull llama3.2:3b
+   ollama pull nomic-embed-text
+   ```
+3. **Dependências do Projeto**:
+   ```bash
+   pip install -e ".[dev]"
+   playwright install chromium
+   ```
+
+---
+
+## 🚀 Guia Rápido de Uso (CLI)
+
+### 1. Autenticação Interativa no LinkedIn
+Salva a sessão com segurança para permitir que o robô navegue sem ser bloqueado:
+```bash
+python -m src.presentation.cli login
+```
+*Uma janela do Chrome abrirá. Faça login com seu 2FA e pressione ENTER no terminal quando carregar o Feed.*
+
+### 2. Onboarding do Perfil com Entrevista Adaptativa (Grill-Me)
+Deixe o Profiler Agent compreender o seu perfil, traçar o perfil de vaga alvo e calibrar preferências com 3 a 5 perguntas rápidas:
+```bash
+# Via URL do LinkedIn:
+python -m src.presentation.cli onboard --url "https://www.linkedin.com/in/seu-perfil"
+
+# Ou via arquivo PDF exportado do perfil:
+python -m src.presentation.cli onboard --pdf "meu_perfil.pdf"
+```
+
+### 3. Gestão e Teste de Padrões no DuckDB VSS
+Inspecione ou faça perguntas ao seu banco vetorial para conferir como o robô responderá perguntas de formulários:
+```bash
+# Ver blocos semânticos armazenados
+python -m src.presentation.cli profile show
+
+# Testar síntese RAG para uma pergunta de recrutador
+python -m src.presentation.cli profile ask "How many years of Python experience do you have?"
+python -m src.presentation.cli profile ask "What are your salary expectations?"
+```
+
+### 4. Executar Busca, Triagem e Candidatura Automática
+Execute o loop fechado completo com relatório Rich no terminal:
+```bash
+# Modo Dry-Run (preenche os campos no Easy Apply mas não envia, para conferência):
+python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --limit 5 --apply --dry-run
+
+# Modo Supervisionado com Navegador Visível para acompanhar o robô preenchendo:
+python -m src.presentation.cli apply --dry-run --no-headless
+
+# Envio Real para todas as vagas que baterem o threshold técnico:
+python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --limit 10 --apply
+```
+
+### 5. Estatísticas e Métricas da Base
+```bash
+python -m src.presentation.cli stats
 ```
 
 ---
 
-## 🛠 Como Usar (Deploy em 3 Passos)
+## 🏛 Estrutura do Código (Arquitetura Hexagonal)
 
-### 1. Requisitos
-- **Docker** ou **Podman** instalados na sua máquina.
-
-### 2. Subindo a Infraestrutura
-Abra o terminal na pasta do projeto e inicie os microserviços:
-```bash
-# Se usar Docker:
-docker-compose up -d --build
-
-# Se usar Podman:
-podman-compose up -d --build
+```text
+src/
+├── domain/                      # Entidades de Domínio e Schemas Pydantic
+│   └── models.py                # JobPosting, CandidateProfile, MatchEvaluation
+├── application/                 # Casos de Uso e Portas
+│   ├── ports/                   # Interfaces abstratas
+│   └── use_cases/               # Lógica de aplicação
+│       ├── onboard.py           # Profiler Agent & Entrevista Grill-Me
+│       ├── profile.py           # ProfileManager & DuckDB VSS Engine
+│       ├── auto_apply.py        # FormFiller Agent (Playwright Easy Apply)
+│       ├── pipeline.py          # Closed-loop DAG Pipeline
+│       ├── harness.py           # LocalLoopGuard & Circuit Breaker
+│       └── truncator.py         # TextTruncator & Sanitizador
+├── infrastructure/              # Adaptadores de Entrada/Saída
+│   └── adapters/
+│       ├── repository.py        # Repositório DuckDB
+│       ├── llm_evaluator.py     # Avaliador LLM (Instructor + Ollama)
+│       ├── mcp_client.py        # Cliente MCP LinkedIn
+│       └── mcp_mock_client.py   # Mock MCP para testes offline
+└── presentation/                # Camada de Interface CLI
+    ├── cli.py                   # Typer CLI principal
+    ├── ui_console.py            # Rich Live Dashboard
+    └── ui_banner.py             # ASCII Art Banner
 ```
-*Isso fará o download do Playwright e do Open WebUI.*
-
-### 3. Baixando a Inteligência
-Com os containers rodando, instrua o seu nó do Ollama a baixar os modelos Open-Weight necessários:
-```bash
-# Se usar Docker:
-docker exec ollama ollama pull llama3.2:3b
-docker exec ollama ollama pull nomic-embed-text
-
-# Se usar Podman:
-podman exec ollama ollama pull llama3.2:3b
-podman exec ollama ollama pull nomic-embed-text
-```
-
-### 4. A Ponte com o LinkedIn (Login Manual Seguro)
-O LinkedIn barra robôs sem sessão. Para o `Auto-Apply` funcionar:
-1. Rode na sua máquina: `python src/presentation/linkedin_auth.py`
-2. O navegador se abrirá. Faça login na sua conta normalmente.
-3. Aperte `ENTER` no terminal. Seus cookies de sessão serão criptografados e salvos em `data/linkedin_state.json`. O Container lerá esse arquivo a partir de agora e será invisível.
 
 ---
 
-## 🗣 Operação pelo Open WebUI
+## 🧪 Testes Automatizados
 
-Abra seu navegador e acesse **`http://localhost:8080`**.
-1. Crie sua conta administrativa local.
-2. Na aba **Workspace > Tools**, crie uma Tool chamada `JobBot` e cole o conteúdo do nosso arquivo `src/presentation/open_webui_tool.py`.
-3. No chat, ative a Tool e diga: *"Inicie uma busca por vagas de Desenvolvedor Python Pleno"*.
-4. O container `job-bot` receberá o POST, buscará vagas via MCP, passará pelo filtro vetorial do Llama 3.2, e começará o Auto-Apply no background.
+O projeto conta com **199 testes automatizados** cobrindo Unit, Integration e End-to-End:
 
-Se quiser saber o status, basta pedir ao chat: *"Me dê o relatório diário das vagas processadas"*.
-
-## 🧪 Desenvolvimento e Testes
-
-O projeto conta com mais de 90 testes separados nas camadas Hexagonais usando `pytest`:
 ```bash
-# Rodar Testes Unitários
-pytest tests/unit
-
-# Rodar Integração
-pytest tests/integration
-
-# End-to-End
-pytest tests/e2e
+# Executar a suite completa
+pytest tests/unit/ tests/integration/ tests/e2e/
 ```
 
-## License
+- **Unitários (`tests/unit/`)**: Modelos, banco DuckDB, avaliador LLM, cliente MCP, truncador de texto, ProfileManager e ProfilerAgent.
+- **Integração (`tests/integration/`)**: Execução de comandos Typer CLI (`onboard`, `profile`, `apply`, `run`, `stats`), harness e pipeline.
+- **End-to-End (`tests/e2e/`)**: Fluxo Playwright ponta a ponta simulando formulário real do Easy Apply, inferência ao vivo com Ollama local e testes de resiliência a timeouts.
 
-MIT License
+---
+
+## 📄 Licença
+
+Distribuído sob licença MIT. Consulte `LICENSE` para mais informações.

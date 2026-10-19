@@ -19,7 +19,8 @@ import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+from typing_extensions import Self
 
 from src.infrastructure.adapters.llm_evaluator import LLMTimeoutError
 from src.domain.models import JobPosting, JobStatus

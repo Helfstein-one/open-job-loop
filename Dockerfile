@@ -8,7 +8,7 @@ COPY pyproject.toml /app/
 
 # Instala as dependências Python
 RUN pip install --no-cache-dir -e .
-RUN pip install fastapi uvicorn
+RUN pip install fastapi uvicorn uv
 
 # Copia o código fonte
 COPY src /app/src

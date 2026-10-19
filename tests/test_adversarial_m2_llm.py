@@ -36,7 +36,7 @@ from src.infrastructure.adapters.llm_prompts import (
     wrap_job_posting,
 )
 from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
-from tests.test_llm import is_ollama_available
+from tests.unit.test_llm import is_ollama_available
 
 
 @pytest.fixture

@@ -16,12 +16,13 @@ Provides CLI entry points for:
 import asyncio
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.prompt import Prompt
 
 from src.application.use_cases.harness import LocalLoopGuard
 from src.application.use_cases.pipeline import JobPipeline
@@ -31,6 +32,9 @@ from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
 from src.infrastructure.adapters.mcp_client import BaseJobIngestionClient, McpJobClient
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import CandidateProfile
+from src.application.use_cases.profile import ProfileManager
+from src.application.use_cases.auto_apply import AutoApplyWorker
+from src.application.use_cases.onboard import ProfilerAgent
 from src.presentation.ui_banner import DEFAULT_VERSION, render_banner
 from src.presentation.ui_console import create_pipeline_ui
 
@@ -216,6 +220,376 @@ def stats_cmd(
     run_sync(_fetch_and_render())
 
 
+@app.command(name="login")
+def login_cmd(
+    state_file: str = typer.Option(
+        "data/linkedin_state.json",
+        "--state-file",
+        "-s",
+        help="Path to save the authenticated LinkedIn session cookies.",
+    ),
+) -> None:
+    """
+    Open an interactive browser window to log into LinkedIn and save authenticated session cookies.
+    """
+    async def _login() -> None:
+        from playwright.async_api import async_playwright
+        console.print(
+            Panel(
+                "[bold cyan]Iniciando navegador para login no LinkedIn...[/]\n\n"
+                "1. Insira seu e-mail, senha e 2FA na janela do navegador que acabou de abrir.\n"
+                "2. Assim que carregar o Feed do LinkedIn, volte a este terminal e pressione ENTER.\n"
+                "3. A sessão será salva para que o robô possa buscar vagas e preencher candidaturas.",
+                title="[bold yellow]Autenticação Interativa LinkedIn[/]",
+                border_style="yellow",
+            )
+        )
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            context = await browser.new_context()
+            page = await context.new_page()
+            await page.goto("https://www.linkedin.com/login")
+
+            await asyncio.to_thread(input, "\n👉 Pressione ENTER aqui após concluir o login no navegador: ")
+
+            Path(state_file).parent.mkdir(parents=True, exist_ok=True)
+            await context.storage_state(path=state_file)
+            await browser.close()
+
+        console.print(
+            Panel(
+                f"[bold green]Sessão salva com sucesso em '[bright_white]{state_file}[/]'.[/]\n"
+                "O robô agora está autenticado para buscar vagas reais e executar o Easy Apply.",
+                title="[bold green]Autenticação Concluída[/]",
+                border_style="green",
+            )
+        )
+
+    run_sync(_login())
+
+
+@app.command(name="onboard")
+def onboard_cmd(
+    url: Optional[str] = typer.Option(
+        None,
+        "--url",
+        "-u",
+        help="LinkedIn profile URL to scrape (e.g. https://www.linkedin.com/in/username).",
+    ),
+    pdf: Optional[str] = typer.Option(
+        None,
+        "--pdf",
+        "-p",
+        help="Path to LinkedIn profile PDF export.",
+    ),
+    state_file: str = typer.Option(
+        "data/linkedin_state.json",
+        "--state-file",
+        "-s",
+        help="Path to saved LinkedIn cookies session file.",
+    ),
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="DuckDB database path.",
+    ),
+    profile_path: str = typer.Option(
+        "data/profile.yaml",
+        "--output",
+        "-o",
+        help="Target YAML path to save compiled candidate profile.",
+    ),
+    model: str = typer.Option(
+        "llama3.2:3b",
+        "--model",
+        help="Ollama LLM model to analyze profile and generate adaptive questions.",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock/--no-mock",
+        help="Use deterministic mock reasoning and profile extraction.",
+    ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Accept suggested defaults without prompting in terminal.",
+    ),
+) -> None:
+    """
+    Onboard a LinkedIn profile: analyze background, formulate target job profile,
+    conduct adaptive grill-me interview, and compile profile.yaml into DuckDB VSS.
+    """
+    async def _onboard() -> None:
+        agent = ProfilerAgent(model=model, db_path=db_path, mock_mode=mock)
+        raw_text = ""
+
+        # 1. Extraction
+        if pdf:
+            console.print(f"[cyan]Lendo perfil a partir do PDF:[/] [bright_white]{pdf}[/]")
+            raw_text = agent.extract_from_pdf(pdf)
+        elif url:
+            console.print(f"[cyan]Navegando até o perfil no LinkedIn:[/] [bright_white]{url}[/]")
+            with console.status("[cyan]Acessando LinkedIn e extraindo dados do perfil...[/]"):
+                raw_text = await agent.extract_from_url(url, state_file=state_file)
+        else:
+            if not mock and console.is_terminal and not non_interactive:
+                choice = Prompt.ask(
+                    "[bold yellow]Como deseja fornecer seu perfil?[/]\n"
+                    "Digite a [bold cyan]URL do LinkedIn[/] ou o [bold cyan]caminho de um PDF[/]",
+                    default="data/profile.yaml",
+                )
+                if choice.endswith(".pdf"):
+                    raw_text = agent.extract_from_pdf(choice)
+                elif choice.startswith("http"):
+                    with console.status("[cyan]Acessando LinkedIn e extraindo dados do perfil...[/]"):
+                        raw_text = await agent.extract_from_url(choice, state_file=state_file)
+                else:
+                    raw_text = ""
+
+        # 2. Analysis & Target Job Profile Formulation
+        with console.status("[cyan]Profiler Agent analisando perfil e formulando Perfil Alvo...[/]"):
+            analysis = await agent.analyze_profile(raw_text)
+
+        cand = analysis.get("candidate", {})
+        target = analysis.get("target_profile", {})
+
+        roles_str = ", ".join(target.get("target_roles", []))
+        strengths_str = " • " + "\n • ".join(target.get("key_strengths", []))
+
+        console.print(
+            Panel(
+                f"[bold green]Candidato:[/] [bright_white]{cand.get('name', 'N/A')}[/] ({cand.get('title', 'N/A')})\n"
+                f"[bold green]Senioridade Inquirida:[/] {target.get('seniority_level', 'Senior')}\n"
+                f"[bold green]Cargos Alvo Sugeridos:[/] [bold cyan]{roles_str}[/]\n"
+                f"[bold green]Palavras-chave de Busca:[/] [yellow]{target.get('suggested_keywords', '')}[/]\n"
+                f"[bold green]Benchmark Salarial:[/] [magenta]{target.get('estimated_salary_range', '')}[/]\n\n"
+                f"[bold underline]Pontos Fortes Identificados:[/]\n{strengths_str}",
+                title="[bold cyan]🎯 Perfil Alvo de Vagas Proposto (Target Job Spec)[/]",
+                border_style="cyan",
+            )
+        )
+
+        # 3. Entrevista Adaptativa (Grill-Me)
+        console.print("\n[bold yellow]🎙️  Iniciando Entrevista Adaptativa (Grill-Me) para Calibração de Preferências[/]")
+        console.print("[dim]Pressione ENTER para aceitar a sugestão do robô ou digite sua resposta personalizada.[/]\n")
+
+        answers: Dict[str, str] = {}
+        questions = target.get("suggested_questions", [])
+
+        for idx, q_item in enumerate(questions, 1):
+            q_id = q_item.get("id", f"q_{idx}")
+            q_text = q_item.get("question", "")
+            default_val = q_item.get("default", "")
+
+            if non_interactive or mock or not console.is_terminal:
+                answers[q_id] = default_val
+                console.print(f"[bold cyan][{idx}/{len(questions)}][/] {q_text}")
+                console.print(f"👉 [green]Resposta adotada:[/] {default_val}\n")
+            else:
+                user_ans = Prompt.ask(f"[bold cyan][{idx}/{len(questions)}][/] {q_text}", default=default_val)
+                answers[q_id] = user_ans
+
+        # 4. Compilação e Persistência
+        profile_data = agent.compile_profile_yaml(analysis, answers, output_path=profile_path)
+
+        # 5. Vetorização no DuckDB VSS
+        manager = ProfileManager(db_path=db_path, mock_mode=mock)
+        with console.status(f"[cyan]Vetorizando novo perfil em {db_path} via DuckDB VSS...[/]"):
+            count = await manager.sync_from_yaml(profile_path)
+
+        console.print(
+            Panel(
+                f"[bold green]✅ Onboarding Concluído com Sucesso![/]\n"
+                f"• Perfil consolidado em: [bright_white]{profile_path}[/]\n"
+                f"• Blocos indexados no DuckDB VSS: [bold cyan]{count}[/]\n"
+                f"• Palavra-chave para busca: [yellow]{profile_data['target_job_profile']['search_keywords']}[/]\n\n"
+                f"[bold underline]Próximo Passo Recomendado:[/] Execute a busca e o Auto-Apply com multi-agentes:\n"
+                f"[bright_white]python -m src.presentation.cli run --no-mock --keywords \"{profile_data['target_job_profile']['search_keywords']}\" --apply --dry-run[/]",
+                title="[bold green]Multi-Agent Onboarding Finalizado[/]",
+                border_style="green",
+            )
+        )
+
+    run_sync(_onboard())
+
+
+# ==============================================================================
+# Profile Management Subcommands
+# ==============================================================================
+
+profile_app = typer.Typer(
+    name="profile",
+    help="Manage candidate patterns, profile YAML, and DuckDB VSS vector embeddings.",
+    no_args_is_help=True,
+)
+app.add_typer(profile_app, name="profile")
+
+
+@profile_app.command(name="sync")
+def profile_sync_cmd(
+    file: str = typer.Option(
+        "data/profile.yaml",
+        "--file",
+        "-f",
+        help="Path to the candidate profile YAML file.",
+    ),
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to the DuckDB database file.",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock/--no-mock",
+        help="Use deterministic mock embeddings (useful for tests or without Ollama).",
+    ),
+) -> None:
+    """
+    Sync and vectorize candidate profile into DuckDB VSS for RAG form filling.
+    """
+    async def _sync() -> None:
+        manager = ProfileManager(db_path=db_path, mock_mode=mock)
+        with console.status(f"[cyan]Vectorizing profile from '{file}' into DuckDB VSS...[/]"):
+            count = await manager.sync_from_yaml(file)
+        console.print(
+            Panel(
+                f"[bold green]Successfully vectorized and indexed {count} semantic chunks[/] into DuckDB VSS.\n"
+                f"Database: [bright_white]{db_path}[/]\n"
+                f"Source: [bright_white]{file}[/]",
+                title="[bold cyan]Profile Synchronization[/]",
+                border_style="green",
+            )
+        )
+
+    run_sync(_sync())
+
+
+@profile_app.command(name="show")
+def profile_show_cmd(
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to the DuckDB database file.",
+    ),
+) -> None:
+    """
+    List candidate profile categories and semantic chunks stored in DuckDB VSS.
+    """
+    manager = ProfileManager(db_path=db_path)
+    chunks = manager.list_chunks()
+    if not chunks:
+        console.print(f"[yellow]No profile chunks found in '{db_path}'. Run 'jobloop profile sync' first.[/]")
+        return
+
+    table = Table(
+        title=f"Stored Candidate Profile Patterns ({db_path})",
+        border_style="cyan",
+        header_style="bold bright_white on blue",
+    )
+    table.add_column("Category", style="cyan", justify="left")
+    table.add_column("Content Preview", style="white", justify="left")
+
+    for ch in chunks:
+        preview = ch["content"].replace("\n", " ")
+        if len(preview) > 100:
+            preview = preview[:97] + "..."
+        table.add_row(ch["category"], preview)
+
+    console.print(table)
+
+
+@profile_app.command(name="ask")
+def profile_ask_cmd(
+    question: str = typer.Argument(..., help="Question to test against candidate profile RAG."),
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to the DuckDB database file.",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock/--no-mock",
+        help="Use mock reasoning / heuristics instead of live Ollama.",
+    ),
+) -> None:
+    """
+    Query candidate profile RAG and test synthesized form answers.
+    """
+    async def _ask() -> None:
+        manager = ProfileManager(db_path=db_path, mock_mode=mock)
+        with console.status(f"[cyan]Searching profile and synthesizing answer for: '{question}'...[/]"):
+            matches = await manager.search_profile(question, limit=2)
+            answer = await manager.synthesize_answer(question)
+
+        console.print(f"\n[bold cyan]Question:[/] {question}")
+        console.print(f"[bold green]Synthesized Answer:[/] [bold bright_white]{answer}[/]\n")
+
+        table = Table(title="Top Retrieved RAG Context", border_style="dim")
+        table.add_column("Category", style="cyan")
+        table.add_column("Distance", style="yellow", justify="right")
+        table.add_column("Snippet", style="dim")
+        for m in matches:
+            table.add_row(m["category"], f"{m['distance']:.4f}", m["content"][:120] + "...")
+        console.print(table)
+
+    run_sync(_ask())
+
+
+@app.command(name="apply")
+def apply_cmd(
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to the DuckDB database file.",
+    ),
+    headless: bool = typer.Option(
+        True,
+        "--headless/--no-headless",
+        help="Run browser in headless mode.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="Simulate form filling without submitting.",
+    ),
+    limit: Optional[int] = typer.Option(
+        None,
+        "--limit",
+        "-n",
+        help="Maximum number of shortlisted jobs to process.",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock/--no-mock",
+        help="Use mock embeddings and heuristics.",
+    ),
+) -> None:
+    """
+    Execute LinkedIn Easy Apply automation for all SHORTLISTED jobs using DuckDB VSS RAG.
+    """
+    async def _apply() -> None:
+        worker = AutoApplyWorker(
+            db_path=db_path,
+            headless=headless,
+            dry_run=dry_run,
+            mock_mode=mock,
+        )
+        stats = await worker.run(limit=limit)
+        console.print(
+            Panel(
+                f"[bold green]Auto-Apply Execution Finished[/]\n"
+                f"Processed: [bold]{stats['processed']}[/] | "
+                f"Applied: [bold green]{stats['applied']}[/] | "
+                f"Failed: [bold red]{stats['failed']}[/] | "
+                f"Skipped: [bold yellow]{stats['skipped']}[/]",
+                title="[bold cyan]LinkedIn Application Summary[/]",
+                border_style="green" if stats["applied"] > 0 else "yellow",
+            )
+        )
+
+    run_sync(_apply())
+
+
 @app.command(name="run")
 def run_cmd(
     keywords: str = typer.Option(
@@ -296,6 +670,16 @@ def run_cmd(
         "Senior Python Engineer with 7+ years building distributed backend systems, FastAPI, DuckDB, Asyncio, and LLM agent tooling.",
         "--candidate-summary",
         help="Candidate background summary.",
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply/--no-apply",
+        help="Automatically trigger LinkedIn Easy Apply for SHORTLISTED jobs.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="When --apply is active, simulate form filling without submitting.",
     ),
 ) -> None:
     """
@@ -394,6 +778,24 @@ def run_cmd(
 
             total_duration = time.monotonic() - start_time
             ui.print_summary(metrics, duration_seconds=total_duration)
+
+            if apply and metrics.get("shortlisted", 0) > 0:
+                ui.log_event("Triggering Auto-Apply worker for SHORTLISTED jobs...")
+                worker = AutoApplyWorker(
+                    db_path=db_path,
+                    headless=headless,
+                    dry_run=dry_run,
+                    mock_mode=mock,
+                )
+                apply_stats = await worker.run(limit=limit)
+                console.print(
+                    Panel(
+                        f"[bold green]Auto-Apply Finished:[/] Applied: [bold]{apply_stats['applied']}[/], "
+                        f"Failed: [bold]{apply_stats['failed']}[/], Skipped: [bold]{apply_stats['skipped']}[/]",
+                        title="[bold cyan]LinkedIn Application Step[/]",
+                        border_style="green",
+                    )
+                )
 
         return 0
 
