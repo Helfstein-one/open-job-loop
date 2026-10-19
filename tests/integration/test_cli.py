@@ -228,6 +228,54 @@ def test_cli_run_custom_fixture(runner: CliRunner, tmp_path: Path):
     assert "Custom Test Backend Engineer" in result.output
 
 
+def test_cli_run_cascade_flags(runner: CliRunner, tmp_path: Path):
+    """Verify `jobloop run --mock` works properly with --model-fast, --model-deep, --deep, and --no-cascade."""
+    db_file = tmp_path / "cascade_run.duckdb"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--mock",
+            "--headless",
+            "--limit",
+            "1",
+            "--db",
+            str(db_file),
+            "--model-fast",
+            "llama3.2:1b",
+            "--model-deep",
+            "qwen2.5-coder:3b",
+            "--deep",
+            "--timeout",
+            "1.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Execution Completed" in result.output
+
+    # Test with --no-cascade
+    db_file_no_cascade = tmp_path / "no_cascade_run.duckdb"
+    result_no_cascade = runner.invoke(
+        app,
+        [
+            "run",
+            "--mock",
+            "--headless",
+            "--limit",
+            "1",
+            "--db",
+            str(db_file_no_cascade),
+            "--no-cascade",
+            "--model",
+            "llama3.2:3b",
+            "--timeout",
+            "1.5",
+        ],
+    )
+    assert result_no_cascade.exit_code == 0
+    assert "Execution Completed" in result_no_cascade.output
+
+
 # ==============================================================================
 # UI Module Direct Tests
 # ==============================================================================

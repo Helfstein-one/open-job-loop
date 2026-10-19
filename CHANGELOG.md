@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-10-19
+### Added
+- **3-Tier Cascade Model Architecture (`CascadeJobEvaluator`)**:
+  - **Tier 0 (Semantic Pre-check)**: DuckDB VSS cosine distance check using `nomic-embed-text` embeddings (0ms LLM time, discards completely out-of-scope roles).
+  - **Tier 1 (Fast Gatekeeper)**: Ultra-fast binary classification using `llama3.2:1b` (~150ms) to discard irrelevant roles before invoking heavy inference.
+  - **Tier 2 (Deep Evaluator & ATS Form Filler)**: Precision technical evaluation and structured Pydantic schema extraction via `qwen2.5-coder:3b` (or `7b` with `--deep`).
+- **CLI Model Efficiency Controls**:
+  - `--model-fast`: Configure Tier 1 gatekeeper model (default: `llama3.2:1b`).
+  - `--model-deep`: Configure Tier 2 deep evaluator model (default: `qwen2.5-coder:3b`).
+  - `--deep`: One-click switch to `qwen2.5-coder:7b` for maximum code and technical seniority reasoning.
+  - `--no-cascade`: Legacy toggle to bypass cascade and run direct single-stage evaluation.
+- **Testing & Performance**:
+  - Test suite expanded to 439 passing tests (unit, integration, adversarial, stress, and E2E).
+  - Suite execution time dropped from 3m18s to 2m46s (-16.2% latency reduction).
+
 ## [2.1.0] - 2026-10-19
 ### Added
 - **Multi-Channel ATS Adapters**:

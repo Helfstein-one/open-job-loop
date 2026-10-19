@@ -40,7 +40,7 @@ class ProfileManager:
         self,
         db_path: str = "open_job_loop.duckdb",
         embedding_model: str = "nomic-embed-text",
-        llm_model: str = "llama3.2:3b",
+        llm_model: str = "qwen2.5-coder:3b",
         mock_mode: bool = False,
         base_url: Optional[str] = None,
     ):

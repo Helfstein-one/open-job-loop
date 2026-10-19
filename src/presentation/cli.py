@@ -29,6 +29,12 @@ from src.application.use_cases.pipeline import JobPipeline
 from src.application.use_cases.truncator import TextTruncator
 from src.infrastructure.adapters.repository import JobRepository
 from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.cascade_evaluator import (
+    CascadeJobEvaluator,
+    DEFAULT_FAST_MODEL,
+    DEFAULT_DEEP_MODEL,
+    DEEP_HIGH_PRECISION_MODEL,
+)
 from src.infrastructure.adapters.mcp_client import BaseJobIngestionClient, McpJobClient
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import CandidateProfile
@@ -574,10 +580,22 @@ def apply_cmd(
         "--non-interactive",
         help="Disable interactive terminal active learning prompt and use best LLM inference.",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="Ollama LLM model tag for form answering and active learning (default: qwen2.5-coder:3b).",
+    ),
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help="Use high-precision model (qwen2.5-coder:7b) for ATS form synthesis.",
+    ),
 ) -> None:
     """
     Execute LinkedIn Easy Apply & ATS (Greenhouse, Lever, Ashby) automation for all SHORTLISTED jobs.
     """
+    effective_ats_model = DEEP_HIGH_PRECISION_MODEL if deep else (model or DEFAULT_DEEP_MODEL)
+
     async def _apply() -> None:
         worker = AutoApplyWorker(
             db_path=db_path,
@@ -586,6 +604,7 @@ def apply_cmd(
             mock_mode=mock,
             resume_path=resume_path,
             interactive_active_learning=not non_interactive,
+            llm_model=effective_ats_model,
         )
         stats = await worker.run(limit=limit)
         console.print(
@@ -659,10 +678,30 @@ def run_cmd(
         min=1,
         help="Maximum loop iterations bound for the execution harness.",
     ),
-    model: str = typer.Option(
-        "llama3.2:3b",
+    model_fast: str = typer.Option(
+        DEFAULT_FAST_MODEL,
+        "--model-fast",
+        help="Ultra-fast gatekeeper model tag for Tier 1 triage (default: llama3.2:1b).",
+    ),
+    model_deep: str = typer.Option(
+        DEFAULT_DEEP_MODEL,
+        "--model-deep",
+        help="Deep technical evaluation model tag for Tier 2 (default: qwen2.5-coder:3b).",
+    ),
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help="Switch Tier 2 model to qwen2.5-coder:7b for maximum technical precision.",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
         "--model",
-        help="Ollama local LLM model tag for triage evaluation.",
+        help="Legacy override to enforce a single model tag across triage evaluation.",
+    ),
+    no_cascade: bool = typer.Option(
+        False,
+        "--no-cascade",
+        help="Disable 3-tier cascade and run direct single-stage evaluation.",
     ),
     base_url: str = typer.Option(
         os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
@@ -704,8 +743,17 @@ def run_cmd(
     """
     Execute the autonomous closed-loop pipeline (Discover -> Dedup -> Truncate -> Triage -> Decision Tree).
     """
+    effective_deep = DEEP_HIGH_PRECISION_MODEL if deep else model_deep
+    if model:
+        effective_deep = model
+        effective_fast = model
+    else:
+        effective_fast = model_fast
+
+    display_model = f"Cascade ({effective_fast} -> {effective_deep})" if not no_cascade else effective_deep
+
     if not headless and console.is_terminal:
-        render_banner(console=console, model=model, db_path=db_path)
+        render_banner(console=console, model=display_model, db_path=db_path)
 
     start_time = time.monotonic()
 
@@ -726,7 +774,7 @@ def run_cmd(
             location=location,
             limit=limit,
             threshold=threshold,
-            model=model,
+            model=display_model,
             db_path=db_path,
             max_iterations=max_iterations,
         )
@@ -737,12 +785,23 @@ def run_cmd(
             repo = JobRepository(db_path=db_path)
             await repo.initialize()
 
-            evaluator = JobFitEvaluator(
-                base_url=base_url,
-                model=model,
-                timeout=timeout,
-                score_threshold=threshold,
-            )
+            if no_cascade:
+                evaluator = JobFitEvaluator(
+                    base_url=base_url,
+                    model=effective_deep,
+                    timeout=timeout,
+                    score_threshold=threshold,
+                )
+            else:
+                evaluator = CascadeJobEvaluator(
+                    base_url=base_url,
+                    model_fast=effective_fast,
+                    model_deep=effective_deep,
+                    timeout=timeout,
+                    score_threshold=threshold,
+                    db_path=db_path,
+                    mock_mode=mock,
+                )
 
             truncator = TextTruncator(max_tokens=1500)
 

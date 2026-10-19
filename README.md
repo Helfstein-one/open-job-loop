@@ -117,7 +117,24 @@ python -m src.presentation.cli apply --dry-run --no-headless
 python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --limit 10 --apply
 ```
 
-### 5. Estatísticas e Métricas da Base
+### 5. Otimização de Inferência em Cascata (3 Tiers)
+O sistema opera em cascata multi-modelo local para máxima velocidade e acurácia:
+- **Tier 0**: Pre-filtro vetorial DuckDB VSS (`nomic-embed-text`) descarta vagas fora de área em 0ms de LLM.
+- **Tier 1 (Gatekeeper)**: `llama3.2:1b` (~150ms) realiza triagem binária de senioridade antes de chamar o modelo principal.
+- **Tier 2 (Deep Evaluator)**: `qwen2.5-coder:3b` analisa o match técnico e extrai dados Pydantic com precisão cirúrgica.
+
+```bash
+# Execução padrão em cascata (Llama 3.2 1B -> Qwen 2.5 Coder 3B):
+python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer"
+
+# Alta Precisão Técnica com Qwen 2.5 Coder 7B para vagas complexas:
+python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --deep
+
+# Configuração customizada de modelos por tier:
+python -m src.presentation.cli run --model-fast llama3.2:1b --model-deep qwen2.5-coder:3b
+```
+
+### 6. Estatísticas e Métricas da Base
 ```bash
 python -m src.presentation.cli stats
 ```

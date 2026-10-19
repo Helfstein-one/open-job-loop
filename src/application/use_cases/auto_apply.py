@@ -31,6 +31,7 @@ class AutoApplyWorker:
         state_file: str = "data/linkedin_state.json",
         resume_path: Optional[str] = "data/resume.pdf",
         interactive_active_learning: bool = True,
+        llm_model: str = "qwen2.5-coder:3b",
     ):
         self.db_path = db_path
         self.headless = headless
@@ -39,6 +40,7 @@ class AutoApplyWorker:
         self.state_file = state_file
         self.resume_path = resume_path
         self.interactive_active_learning = interactive_active_learning
+        self.llm_model = llm_model
 
     async def run(self, limit: Optional[int] = None) -> Dict[str, Any]:
         logger.info(
@@ -100,7 +102,11 @@ class AutoApplyWorker:
         except Exception:
             pass
 
-        profile_manager = ProfileManager(db_path=self.db_path, mock_mode=self.mock_mode)
+        profile_manager = ProfileManager(
+            db_path=self.db_path,
+            mock_mode=self.mock_mode,
+            llm_model=self.llm_model,
+        )
         active_learning = ActiveLearningService(
             profile_manager=profile_manager,
             interactive=self.interactive_active_learning,
