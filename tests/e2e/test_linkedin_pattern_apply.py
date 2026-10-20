@@ -90,14 +90,57 @@ def mock_job_server():
     server.stop()
 
 
+SAMPLE_E2E_PROFILE_YAML = """
+candidate:
+  name: "Maurício Helfstein Gonçalves"
+  email: "mauricio@example.com"
+  phone: "+55 11 99999-9999"
+  location: "São Paulo, Brazil"
+  title: "Staff Data Engineer"
+  years_of_experience: 10
+  linkedin_url: "https://linkedin.com/in/mauricio"
+
+work_authorization:
+  authorized_in_brazil: true
+  authorized_in_us: false
+  requires_sponsorship_us: true
+  requires_sponsorship_eu: false
+
+preferences:
+  expected_salary_usd: "$140,000"
+  expected_salary_brl: "R$ 38.000"
+  notice_period: "2 weeks"
+  work_preference: "Remote"
+
+summary: "Staff Data Engineer with 10+ years experience in Python, DuckDB, and Spark."
+
+skills:
+  languages: ["Python", "SQL"]
+  data_engineering: ["DuckDB", "Spark"]
+
+standard_answers:
+  - question: "How many years of experience do you have with Python?"
+    answer: "10"
+  - question: "What is your desired salary or compensation expectations?"
+    answer: "$140,000"
+  - question: "Will you now or in the future require visa sponsorship to work in the United States?"
+    answer: "Yes"
+  - question: "Will you now or in the future require visa sponsorship?"
+    answer: "Yes"
+"""
+
+
 @pytest.mark.asyncio
 async def test_e2e_linkedin_pattern_identification_and_auto_apply(tmp_path, mock_job_server):
     db_file = str(tmp_path / "e2e_apply.duckdb")
+    yaml_file = str(tmp_path / "test_profile.yaml")
+    with open(yaml_file, "w", encoding="utf-8") as f:
+        f.write(SAMPLE_E2E_PROFILE_YAML)
 
     # 1. Sync candidate profile into DuckDB VSS
     profile_manager = ProfileManager(db_path=db_file, mock_mode=True)
-    count = await profile_manager.sync_from_yaml("data/profile.yaml")
-    assert count >= 10
+    count = await profile_manager.sync_from_yaml(yaml_file)
+    assert count >= 5
 
     # 2. Verify pattern identification for form questions
     py_ans = await profile_manager.synthesize_answer(

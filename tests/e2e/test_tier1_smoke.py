@@ -10,6 +10,7 @@ Validates:
 
 from __future__ import annotations
 
+import re
 import pytest
 from typer.testing import CliRunner
 
@@ -69,19 +70,21 @@ class TestTier1BannerCommand:
         assert "9.9.9-test" in result.stdout
 
     def test_banner_help(self):
-        result = runner.invoke(app, ["banner", "--help"])
+        result = runner.invoke(app, ["banner", "--help"], color=False)
+        clean_out = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", result.stdout)
         assert result.exit_code == 0
-        assert "--plain" in result.stdout
-        assert "--version" in result.stdout
+        assert "--plain" in clean_out
+        assert "--version" in clean_out
 
 
 class TestTier1StatsCommand:
     """Verify database statistics reporting."""
 
     def test_stats_help(self):
-        result = runner.invoke(app, ["stats", "--help"])
+        result = runner.invoke(app, ["stats", "--help"], color=False)
+        clean_out = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", result.stdout)
         assert result.exit_code == 0
-        assert "--db" in result.stdout
+        assert "--db" in clean_out
 
     def test_stats_empty_database(self, temp_db_path):
         result = runner.invoke(app, ["stats", "--db", temp_db_path])
@@ -133,11 +136,12 @@ class TestTier1RunOptionValidation:
     """Verify boundary conditions and option validations on run command."""
 
     def test_run_help(self):
-        result = runner.invoke(app, ["run", "--help"])
+        result = runner.invoke(app, ["run", "--help"], color=False)
+        clean_out = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", result.stdout)
         assert result.exit_code == 0
-        assert "--keywords" in result.stdout
-        assert "--limit" in result.stdout
-        assert "--threshold" in result.stdout
+        assert "--keywords" in clean_out
+        assert "--limit" in clean_out
+        assert "--threshold" in clean_out
         assert "--mock" in result.stdout
         assert "--timeout" in result.stdout
         assert "--max-iterations" in result.stdout

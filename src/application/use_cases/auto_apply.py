@@ -503,13 +503,14 @@ class AutoApplyWorker:
                             f"✅ Candidatura finalizada com sucesso ({new_status}) para {title}"
                         )
 
-                        jitter_sec = random.uniform(
-                            self.linkedin_jitter_range[0], self.linkedin_jitter_range[1]
-                        )
-                        logger.info(
-                            f"⏳ Jitter humano anti-bot: aguardando {jitter_sec:.1f}s antes da próxima ação..."
-                        )
-                        await asyncio.sleep(jitter_sec)
+                        if not self.mock_mode:
+                            jitter_sec = random.uniform(
+                                self.linkedin_jitter_range[0], self.linkedin_jitter_range[1]
+                            )
+                            logger.info(
+                                f"⏳ Jitter humano anti-bot: aguardando {jitter_sec:.1f}s antes da próxima ação..."
+                            )
+                            await asyncio.sleep(jitter_sec)
                     else:
                         # 3. Check for external application redirection
                         ext_apply = page.locator(
