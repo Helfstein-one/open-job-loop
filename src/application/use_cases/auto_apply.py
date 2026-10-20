@@ -340,8 +340,8 @@ class AutoApplyWorker:
                         )
                         conn.execute(
                             """
-                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
-                            VALUES (?, ?, ?, ?, ?, ?::JSON, ?);
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs, applied_at)
+                            VALUES (?, ?, ?, ?, ?, ?::JSON, ?, CURRENT_TIMESTAMP);
                             """,
                             (
                                 job_id,
@@ -384,8 +384,8 @@ class AutoApplyWorker:
                                 )
                                 conn.execute(
                                     """
-                                    INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
-                                    VALUES (?, ?, ?, ?, ?, ?::JSON, ?);
+                                    INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs, applied_at)
+                                    VALUES (?, ?, ?, ?, ?, ?::JSON, ?, CURRENT_TIMESTAMP);
                                     """,
                                     (
                                         job_id,
@@ -407,8 +407,8 @@ class AutoApplyWorker:
                         )
                         conn.execute(
                             """
-                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
-                            VALUES (?, ?, ?, ?, 'SKIPPED_EXTERNAL_MANUAL', ?::JSON, ?);
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs, applied_at)
+                            VALUES (?, ?, ?, ?, 'SKIPPED_EXTERNAL_MANUAL', ?::JSON, ?, CURRENT_TIMESTAMP);
                             """,
                             (
                                 job_id,
@@ -431,8 +431,8 @@ class AutoApplyWorker:
                     try:
                         conn.execute(
                             """
-                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
-                            VALUES (?, ?, ?, ?, 'FAILED_TO_APPLY', ?::JSON, ?);
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs, applied_at)
+                            VALUES (?, ?, ?, ?, 'FAILED_TO_APPLY', ?::JSON, ?, CURRENT_TIMESTAMP);
                             """,
                             (
                                 job_id,
