@@ -575,10 +575,10 @@ def apply_cmd(
         "--mock/--no-mock",
         help="Use mock embeddings and heuristics.",
     ),
-    non_interactive: bool = typer.Option(
+    interactive: bool = typer.Option(
         False,
-        "--non-interactive",
-        help="Disable interactive terminal active learning prompt and use best LLM inference.",
+        "--interactive",
+        help="Enable interactive terminal prompts when new questions appear (default is 100% autonomous).",
     ),
     model: Optional[str] = typer.Option(
         None,
@@ -603,7 +603,7 @@ def apply_cmd(
             dry_run=dry_run,
             mock_mode=mock,
             resume_path=resume_path,
-            interactive_active_learning=not non_interactive,
+            interactive_active_learning=interactive,
             llm_model=effective_ats_model,
         )
         stats = await worker.run(limit=limit)
@@ -650,6 +650,11 @@ def run_cmd(
         min=0,
         max=100,
         help="Minimum candidate fit score (0-100) for SHORTLIST recommendation.",
+    ),
+    easy_apply: bool = typer.Option(
+        True,
+        "--easy-apply/--no-easy-apply",
+        help="Filter search strictly to LinkedIn Easy Apply positions (default: True).",
     ),
     mock: bool = typer.Option(
         False,
@@ -814,7 +819,16 @@ def run_cmd(
                 else:
                     mcp_client = MockMcpJobClient(jobs=BUILTIN_MOCK_JOBS)
             else:
-                mcp_client = McpJobClient(command="uvx", args=["mcp-server-linkedin@latest"], tool_name="search_jobs")
+                mcp_client = McpJobClient(
+                    command="uvx",
+                    args=["mcp-server-linkedin@latest"],
+                    tool_name="search_jobs",
+                    default_tool_args={
+                        "keywords": keywords,
+                        "location": location,
+                        "easy_apply": easy_apply,
+                    },
+                )
 
             await mcp_client.connect()
 
@@ -881,6 +895,104 @@ def run_cmd(
     exit_code = run_sync(_execute_loop())
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
+
+
+@app.command(name="audit")
+def audit_cmd(
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to DuckDB database file.",
+    ),
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        "-n",
+        help="Number of audit records to show.",
+    ),
+) -> None:
+    """
+    Display audit log of submitted job applications and filled form fields from DuckDB.
+    """
+    import duckdb
+    import json
+    import shutil
+    import tempfile
+
+    if not Path(db_path).exists():
+        console.print(f"[yellow]Banco de dados '{db_path}' não encontrado.[/yellow]")
+        return
+
+    tmp_snapshot = None
+    try:
+        try:
+            conn = duckdb.connect(db_path, read_only=True)
+        except duckdb.IOException:
+            with tempfile.NamedTemporaryFile(suffix=".duckdb", delete=False) as tmp:
+                tmp_snapshot = tmp.name
+            shutil.copyfile(db_path, tmp_snapshot)
+            conn = duckdb.connect(tmp_snapshot, read_only=True)
+
+        try:
+            conn.execute("INSTALL vss; LOAD vss;")
+        except Exception:
+            pass
+
+        exists = conn.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'application_audit_log'"
+        ).fetchone()[0]
+        if not exists:
+            console.print("[yellow]Tabela application_audit_log ainda não possui registros.[/yellow]")
+            return
+
+        rows = conn.execute(
+            """
+            SELECT applied_at, job_title, company, channel, status, fields_submitted, logs
+            FROM application_audit_log
+            ORDER BY applied_at DESC
+            LIMIT ?;
+            """,
+            [limit],
+        ).fetchall()
+
+        if not rows:
+            console.print("[yellow]Nenhuma candidatura registrada na auditoria até o momento.[/yellow]")
+            return
+
+        table = Table(title="📜 Application Audit Log (DuckDB)", border_style="cyan")
+        table.add_column("Applied At", style="dim", width=19)
+        table.add_column("Company", style="bold white", width=18)
+        table.add_column("Job Title", style="cyan", width=28)
+        table.add_column("Channel", style="magenta", width=16)
+        table.add_column("Status", style="green", width=14)
+        table.add_column("Fields / Summary", style="white")
+
+        for r in rows:
+            applied_at, title, comp, chan, st, fields_raw, lgs = r
+            dt_str = str(applied_at)[:19] if applied_at else ""
+            summary_parts = []
+            try:
+                fields_list = json.loads(fields_raw) if isinstance(fields_raw, str) else (fields_raw or [])
+                for f in fields_list:
+                    if isinstance(f, dict) and "question" in f and "answer" in f:
+                        summary_parts.append(f"{f['question'][:25]}: [green]{f['answer'][:20]}[/]")
+            except Exception:
+                pass
+            fields_str = " | ".join(summary_parts[:3]) or (lgs or "")[:60]
+            st_color = "green" if "APPLIED" in st else "red"
+            table.add_row(dt_str, (comp or "")[:18], (title or "")[:28], chan or "", f"[{st_color}]{st}[/]", fields_str)
+
+        console.print(table)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        if tmp_snapshot and os.path.exists(tmp_snapshot):
+            try:
+                os.unlink(tmp_snapshot)
+            except Exception:
+                pass
 
 
 # ==============================================================================

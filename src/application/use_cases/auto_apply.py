@@ -30,7 +30,7 @@ class AutoApplyWorker:
         mock_mode: bool = False,
         state_file: str = "data/linkedin_state.json",
         resume_path: Optional[str] = "data/resume.pdf",
-        interactive_active_learning: bool = True,
+        interactive_active_learning: bool = False,
         llm_model: str = "qwen2.5-coder:3b",
     ):
         self.db_path = db_path
@@ -99,6 +99,19 @@ class AutoApplyWorker:
             conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS error_message TEXT;")
             conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS channel VARCHAR;")
             conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS application_audit_log (
+                    id UUID PRIMARY KEY DEFAULT uuid(),
+                    job_id VARCHAR NOT NULL,
+                    job_title VARCHAR NOT NULL,
+                    company VARCHAR NOT NULL,
+                    channel VARCHAR NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status VARCHAR NOT NULL,
+                    fields_submitted JSON NOT NULL,
+                    logs TEXT
+                );
+            """)
         except Exception:
             pass
 
@@ -154,6 +167,7 @@ class AutoApplyWorker:
                     missing_skills = job_row[6] or ""
 
                 logger.info(f"Iniciando fluxo para vaga: '{title}' na '{company}'")
+                submitted_fields: list[dict[str, Any]] = []
                 job_ctx = {
                     "id": job_id,
                     "title": title,
@@ -247,6 +261,11 @@ class AutoApplyWorker:
                                                         await input_element.select_option(label=str(answer))
                                                     except Exception:
                                                         pass
+                                                submitted_fields.append({
+                                                    "question": question_text,
+                                                    "answer": str(answer),
+                                                    "type": "select",
+                                                })
                                                 logger.info(f"  [Dropdown Selecionado] '{question_text}' -> '{answer}'")
                                         elif await input_element.is_editable():
                                             current_val = await input_element.input_value()
@@ -256,6 +275,11 @@ class AutoApplyWorker:
                                                     job_context=job_ctx,
                                                 )
                                                 await input_element.fill(str(answer))
+                                                submitted_fields.append({
+                                                    "question": question_text,
+                                                    "answer": str(answer),
+                                                    "type": "text",
+                                                })
                                                 logger.info(f"  [Campo Respondido (Active Learning RAG)] '{question_text}' -> '{answer}'")
 
                             # Identifica perguntas de rádio/opções (fieldset)
@@ -270,6 +294,11 @@ class AutoApplyWorker:
                                         if await target_radio.count() > 0:
                                             try:
                                                 await target_radio.click()
+                                                submitted_fields.append({
+                                                    "question": q_text,
+                                                    "answer": str(answer),
+                                                    "type": "radio",
+                                                })
                                                 logger.info(f"  [Radio Selecionado] '{q_text}' -> '{answer}'")
                                             except Exception:
                                                 pass
@@ -309,6 +338,21 @@ class AutoApplyWorker:
                             "UPDATE job_postings SET status = ?, channel = ?, application_log = ? WHERE id = ?",
                             (new_status, channel_val, f"Easy Apply completed (dry_run={self.dry_run})", job_id),
                         )
+                        conn.execute(
+                            """
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
+                            VALUES (?, ?, ?, ?, ?, ?::JSON, ?);
+                            """,
+                            (
+                                job_id,
+                                title,
+                                company,
+                                channel_val,
+                                new_status,
+                                json.dumps(submitted_fields, ensure_ascii=False),
+                                f"Easy Apply completed (dry_run={self.dry_run})",
+                            ),
+                        )
                         conn.execute("CHECKPOINT;")
                         stats["applied"] += 1
                         logger.info(f"✅ Candidatura finalizada com sucesso ({new_status}) para {title}")
@@ -338,6 +382,21 @@ class AutoApplyWorker:
                                     "UPDATE job_postings SET status = ?, channel = ?, application_log = ?, error_message = ? WHERE id = ?",
                                     (new_status, app_res.channel.value, app_log, app_res.error_message, job_id),
                                 )
+                                conn.execute(
+                                    """
+                                    INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
+                                    VALUES (?, ?, ?, ?, ?, ?::JSON, ?);
+                                    """,
+                                    (
+                                        job_id,
+                                        title,
+                                        company,
+                                        app_res.channel.value,
+                                        new_status,
+                                        json.dumps([{"log": l} for l in app_res.logs], ensure_ascii=False),
+                                        app_log,
+                                    ),
+                                )
                                 conn.execute("CHECKPOINT;")
                                 continue
 
@@ -345,6 +404,20 @@ class AutoApplyWorker:
                         conn.execute(
                             "UPDATE job_postings SET status = 'NEEDS_REVIEW', channel = 'EXTERNAL_MANUAL' WHERE id = ?",
                             (job_id,),
+                        )
+                        conn.execute(
+                            """
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
+                            VALUES (?, ?, ?, ?, 'SKIPPED_EXTERNAL_MANUAL', ?::JSON, ?);
+                            """,
+                            (
+                                job_id,
+                                title,
+                                company,
+                                "EXTERNAL_MANUAL",
+                                json.dumps([], ensure_ascii=False),
+                                "No Easy Apply button or supported ATS found. Marked as NEEDS_REVIEW.",
+                            ),
                         )
                         conn.execute("CHECKPOINT;")
                         stats["skipped"] += 1
@@ -355,6 +428,23 @@ class AutoApplyWorker:
                         "UPDATE job_postings SET status = 'FAILED_TO_APPLY', error_message = ? WHERE id = ?",
                         (str(e)[:500], job_id),
                     )
+                    try:
+                        conn.execute(
+                            """
+                            INSERT INTO application_audit_log (job_id, job_title, company, channel, status, fields_submitted, logs)
+                            VALUES (?, ?, ?, ?, 'FAILED_TO_APPLY', ?::JSON, ?);
+                            """,
+                            (
+                                job_id,
+                                title,
+                                company,
+                                "ERROR",
+                                json.dumps(submitted_fields, ensure_ascii=False),
+                                str(e),
+                            ),
+                        )
+                    except Exception:
+                        pass
                     conn.execute("CHECKPOINT;")
                     stats["failed"] += 1
 

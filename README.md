@@ -134,7 +134,17 @@ python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --
 python -m src.presentation.cli run --model-fast llama3.2:1b --model-deep qwen2.5-coder:3b
 ```
 
-### 6. Estatísticas e Métricas da Base
+### 6. Auditoria Completa de Submissões no DuckDB
+Todas as candidaturas enviadas (perguntas respondidas, canal, timestamp e status) são registradas com integridade na tabela `application_audit_log`:
+```bash
+# Visualizar histórico de candidaturas submetidas e campos preenchidos
+python -m src.presentation.cli audit
+
+# Filtrar por canal específico (ex: LINKEDIN_EASY_APPLY)
+python -m src.presentation.cli audit --channel LINKEDIN_EASY_APPLY --limit 20
+```
+
+### 7. Estatísticas e Métricas da Base
 ```bash
 python -m src.presentation.cli stats
 ```

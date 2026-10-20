@@ -219,6 +219,7 @@ class McpJobClient(BaseJobIngestionClient):
         read_timeout_seconds: float | None = 300.0,
         source_name: str = "mcp",
         auto_reconnect: bool = False,
+        default_tool_args: dict[str, Any] | None = None,
     ) -> None:
         """
         Initialize the MCP stdio client.
@@ -250,6 +251,7 @@ class McpJobClient(BaseJobIngestionClient):
         self.read_timeout_seconds = read_timeout_seconds
         self.source_name = source_name
         self.auto_reconnect = auto_reconnect
+        self.default_tool_args = default_tool_args or {}
 
         self._exit_stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
@@ -345,13 +347,17 @@ class McpJobClient(BaseJobIngestionClient):
                 raise McpConnectionError("MCP client is not connected. Call connect() first.")
 
         assert self._session is not None
-        tool_args = {"limit": limit, **kwargs}
+        merged_args = {**self.default_tool_args, **kwargs}
+        tool_args = {"limit": limit, **merged_args}
         if self.tool_name == "search_jobs":
             import math
             tool_args = {
-                "keywords": kwargs.get("keywords", "Python Software Engineer"), 
-                "max_pages": kwargs.get("max_pages", max(1, math.ceil(limit / 10)))
+                "keywords": merged_args.get("keywords", "Python Software Engineer"), 
+                "max_pages": merged_args.get("max_pages", max(1, math.ceil(limit / 10))),
+                "easy_apply": merged_args.get("easy_apply", True),
             }
+            if merged_args.get("location"):
+                tool_args["location"] = merged_args["location"]
 
         max_attempts = 12 if self.tool_name == "search_jobs" else 1
         result = None

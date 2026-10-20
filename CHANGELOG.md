@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-10-20
+### Added
+- **Native LinkedIn Easy Apply Filtering**:
+  - `McpJobClient` defaults to `"easy_apply": True` in LinkedIn MCP searches.
+  - `--easy-apply / --no-easy-apply` CLI options in `run` command (default: `True`).
+- **Comprehensive DuckDB Application Audit Log**:
+  - Dedicated `application_audit_log` table storing `job_id`, `job_title`, `company`, `channel`, `status`, `fields_submitted JSON`, `logs`, and `applied_at`.
+  - New CLI command `jobloop audit` to inspect past submissions with resilient DuckDB connection (automatic snapshot fallback on locked files).
+  - Detailed logging for completed applications, skipped external jobs, and failures.
+- **100% Autonomous Zero-Confirmation Auto-Apply**:
+  - Fully autonomous execution by default (`interactive=False`), removing user prompts during application runs.
+  - Autonomous Active Learning auto-infers missing screening answers using local models and persists them to DuckDB VSS.
+  - Robust DOM interactions in Playwright handling `<select>` dropdowns and `<fieldset>` radio buttons in Easy Apply modals.
+
 ## [2.2.0] - 2026-10-19
 ### Added
 - **3-Tier Cascade Model Architecture (`CascadeJobEvaluator`)**:

@@ -53,6 +53,20 @@ DDL_CREATE_INDEX_CREATED_AT = """
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON job_postings (created_at);
 """
 
+DDL_CREATE_AUDIT_LOG_TABLE = """
+CREATE TABLE IF NOT EXISTS application_audit_log (
+    id UUID PRIMARY KEY DEFAULT uuid(),
+    job_id VARCHAR NOT NULL,
+    job_title VARCHAR NOT NULL,
+    company VARCHAR NOT NULL,
+    channel VARCHAR NOT NULL,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR NOT NULL,
+    fields_submitted JSON NOT NULL,
+    logs TEXT
+);
+"""
+
 
 class DatabaseManager:
     """
@@ -105,6 +119,7 @@ class DatabaseManager:
             try:
                 conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS channel VARCHAR;")
                 conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;")
+                conn.execute(DDL_CREATE_AUDIT_LOG_TABLE)
             except Exception:
                 pass
             conn.execute("CHECKPOINT;")

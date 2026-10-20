@@ -26,7 +26,7 @@ class ActiveLearningService:
         self,
         profile_manager: ProfileManager,
         min_confidence: float = 0.70,
-        interactive: bool = True,
+        interactive: bool = False,
         input_fn: Optional[Callable[[str], str]] = None,
         console: Optional[Console] = None,
     ) -> None:
@@ -67,8 +67,17 @@ class ActiveLearningService:
 
         import sys
         if not self.input_fn and (not self.interactive or not sys.stdin.isatty()):
-            logger.info("Modo não-interativo ou non-TTY ativo: utilizando melhor inferência disponível.")
-            return synthesized_ans if synthesized_ans != "N/A" else "Yes"
+            logger.info("Modo autônomo ativo: utilizando melhor inferência RAG e gravando no perfil.")
+            final_ans = synthesized_ans if synthesized_ans != "N/A" else "Yes"
+            try:
+                await self.profile_manager.record_active_learning_answer(
+                    question=question,
+                    answer=final_ans,
+                    category="AutonomousLearning",
+                )
+            except Exception:
+                pass
+            return final_ans
 
         # Ask candidate
         prompt_msg = (
