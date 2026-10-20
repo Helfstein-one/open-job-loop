@@ -901,20 +901,27 @@ def run_cmd(
 
 INTERNATIONAL_ROTATIONS = [
     {"location": "United States", "keywords": "Senior Python Engineer"},
+    {"location": "United Kingdom", "keywords": "Senior Python Engineer"},
     {"location": "European Union", "keywords": "Senior Python Engineer"},
+    {"location": "United States", "keywords": "Python Backend Engineer"},
+    {"location": "United Kingdom", "keywords": "Python Backend Engineer"},
+    {"location": "European Union", "keywords": "Python Backend Engineer"},
     {"location": "United States", "keywords": "Staff Software Engineer Python"},
+    {"location": "United Kingdom", "keywords": "Staff Software Engineer Python"},
     {"location": "European Union", "keywords": "Senior Backend Engineer Python"},
-    {"location": "Worldwide", "keywords": "Senior Python Engineer"},
+    {"location": "United States", "keywords": "FastAPI Python Engineer"},
+    {"location": "United Kingdom", "keywords": "FastAPI Python Engineer"},
+    {"location": "European Union", "keywords": "Staff Python Engineer"},
 ]
 
 
 @app.command(name="batch-run")
 def batch_run_cmd(
     cycles: int = typer.Option(
-        5,
+        10,
         "--cycles",
         "-c",
-        help="Number of multi-query rotation cycles (e.g. 5 for 500 jobs total).",
+        help="Number of multi-query rotation cycles (e.g. 10 for 1000 jobs total).",
     ),
     limit_per_cycle: int = typer.Option(
         100,
@@ -956,8 +963,8 @@ def batch_run_cmd(
     ),
 ) -> None:
     """
-    Execute autonomous multi-query international batch rotation (US/EU/Global).
-    Rotates queries to discover up to 500+ jobs without hitting pagination limits.
+    Execute autonomous multi-query international batch rotation (US/UK/EU).
+    Rotates queries to discover up to 1000+ jobs without hitting pagination limits.
     """
     async def _execute_batch() -> int:
         setup_duckdb_logging(db_path=db_path)
@@ -967,7 +974,7 @@ def batch_run_cmd(
                 f"Cycles: [bold]{cycles}[/] | Target per Cycle: [bold]{limit_per_cycle}[/] "
                 f"| Total Potential Jobs: [bold]{cycles * limit_per_cycle}[/]\n"
                 f"Mode: [bold]{'DRY-RUN' if dry_run else 'PRODUCTION REAL'}[/] | Auto-Apply: [bold]{apply}[/]",
-                title="[bold green]500 International Jobs Runner[/]",
+                title="[bold green]1000 International Jobs Runner (US/UK/EU)[/]",
                 border_style="cyan",
             )
         )
@@ -1066,7 +1073,7 @@ def batch_run_cmd(
                 f"Discovered Postings: [bold]{total_discovered}[/]\n"
                 f"Total Shortlisted: [bold]{total_shortlisted}[/]\n"
                 f"Total Applications Submitted: [bold]{total_applied}[/]",
-                title="[bold green]Summary of 500 International Jobs Batch[/]",
+                title="[bold green]Summary of 1000 International Jobs Batch (US/UK/EU)[/]",
                 border_style="green",
             )
         )
