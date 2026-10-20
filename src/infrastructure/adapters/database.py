@@ -10,7 +10,10 @@ with immediate disk checkpoints and zero large arrays in memory.
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
+import re
+import signal
 import threading
 import time
 from typing import Any, List, Optional, Sequence, Tuple
@@ -121,9 +124,21 @@ class DatabaseManager:
                         self._conn = duckdb.connect(self.db_path, read_only=False)
                         break
                     except duckdb.IOException as e:
-                        if "lock on file" in str(e).lower() and attempt < max_retries - 1:
-                            time.sleep(1.0)
-                            continue
+                        err_str = str(e)
+                        if "lock on file" in err_str.lower():
+                            # Auto self-healing: if a Code Helper / plugin holds a conflicting lock, release it
+                            match = re.search(r'\(PID\s+(\d+)\)', err_str)
+                            if match:
+                                try:
+                                    target_pid = int(match.group(1))
+                                    os.kill(target_pid, signal.SIGTERM)
+                                    time.sleep(1.0)
+                                    continue
+                                except Exception:
+                                    pass
+                            if attempt < max_retries - 1:
+                                time.sleep(1.0)
+                                continue
                         raise
                 # Configure pragmas for performance and durability
                 self._conn.execute("PRAGMA threads=4;")
