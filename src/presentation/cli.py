@@ -41,6 +41,7 @@ from src.domain.models import CandidateProfile
 from src.application.use_cases.profile import ProfileManager
 from src.application.use_cases.auto_apply import AutoApplyWorker
 from src.application.use_cases.onboard import ProfilerAgent
+from src.infrastructure.adapters.database import setup_duckdb_logging
 from src.presentation.ui_banner import DEFAULT_VERSION, render_banner
 from src.presentation.ui_console import create_pipeline_ui
 
@@ -785,6 +786,7 @@ def run_cmd(
         )
 
         with ui:
+            setup_duckdb_logging(db_path=db_path)
             ui.log_event("Initializing DuckDB repository and local LLM evaluator...")
 
             repo = JobRepository(db_path=db_path)

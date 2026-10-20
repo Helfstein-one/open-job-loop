@@ -338,12 +338,21 @@ def setup_duckdb_logging(
     db_manager: Optional[DatabaseManager] = None,
 ) -> DuckDBLoggingHandler:
     """
-    Attach DuckDBLoggingHandler to the root 'src' logger to capture all system events.
+    Attach DuckDBLoggingHandler to root and 'src' loggers to capture all system events.
     """
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers:
+        if isinstance(h, DuckDBLoggingHandler):
+            return h
+
     handler = DuckDBLoggingHandler(db_path=db_path, db_manager=db_manager)
     handler.setLevel(level)
     formatter = logging.Formatter("%(message)s")
     handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+
     src_logger = logging.getLogger("src")
-    src_logger.addHandler(handler)
+    if src_logger.level == logging.NOTSET:
+        src_logger.setLevel(level)
+
     return handler
