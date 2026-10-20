@@ -91,8 +91,21 @@ class ProfilerAgent:
 
             # Extração de seções principais
             body_text = await page.inner_text("main") if await page.locator("main").count() > 0 else await page.inner_text("body")
+
+            # Acessar overlay de informações de contato para extrair e-mail, telefone e portfolio
+            contact_text = ""
+            clean_url = url.split("?")[0].rstrip("/")
+            contact_url = f"{clean_url}/overlay/contact-info/"
+            try:
+                logger.info(f"Acessando overlay de contato em: {contact_url}")
+                await page.goto(contact_url, timeout=15000)
+                await page.wait_for_timeout(2000)
+                contact_text = await page.inner_text("body")
+            except Exception as e:
+                logger.warning(f"Não foi possível acessar overlay de contato: {e}")
+
             await browser.close()
-            return body_text.strip()
+            return f"{body_text}\n\n--- CONTACT INFO ---\n{contact_text}".strip()
 
     async def analyze_profile(self, raw_text: str) -> Dict[str, Any]:
         """
@@ -203,7 +216,30 @@ Output ONLY valid JSON. Zero conversational text.
                 content = content.split("```json", 1)[1].split("```", 1)[0].strip()
             elif "```" in content:
                 content = content.split("```", 1)[1].split("```", 1)[0].strip()
-            return json.loads(content)
+            parsed = json.loads(content)
+            if not isinstance(parsed, dict):
+                parsed = {}
+            if "candidate" not in parsed:
+                parsed["candidate"] = {}
+
+            # Extração determinística de dados de contato do texto bruto
+            email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', raw_text)
+            if email_match:
+                parsed["candidate"]["email"] = email_match.group(0)
+
+            phone_match = re.search(r'(\+?55\s?\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4})', raw_text)
+            if phone_match:
+                parsed["candidate"]["phone"] = phone_match.group(0).strip()
+
+            linkedin_match = re.search(r'linkedin\.com/in/[\w\-]+', raw_text)
+            if linkedin_match:
+                parsed["candidate"]["linkedin_url"] = f"https://www.{linkedin_match.group(0)}"
+
+            github_match = re.search(r'github\.com/[\w\-]+', raw_text)
+            if github_match:
+                parsed["candidate"]["github_url"] = f"https://{github_match.group(0)}"
+
+            return parsed
         except Exception as e:
             logger.warning(f"Erro ao analisar perfil via LLM ({e}). Usando fallback heurístico.")
             return {
@@ -240,12 +276,13 @@ Output ONLY valid JSON. Zero conversational text.
         profile_data = {
             "candidate": {
                 "name": cand.get("name", "Candidato"),
-                "email": answers.get("email", cand.get("email", "candidato@example.com")),
-                "phone": answers.get("phone", cand.get("phone", "+55 11 99999-9999")),
-                "location": answers.get("location", cand.get("location", "Brasil")),
+                "email": answers.get("email") or cand.get("email") or "candidato@example.com",
+                "phone": answers.get("phone") or cand.get("phone") or "+55 11 99999-9999",
+                "location": answers.get("location") or cand.get("location") or "Brasil",
                 "title": cand.get("title", "Staff Data Engineer"),
                 "years_of_experience": cand.get("years_of_experience", 10),
                 "linkedin_url": cand.get("linkedin_url", ""),
+                "github_url": cand.get("github_url", ""),
             },
             "target_job_profile": {
                 "roles": target.get("target_roles", []),
