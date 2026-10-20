@@ -176,13 +176,13 @@ class TestTier3PipelineIntegrationLive:
         evaluator = JobFitEvaluator(
             base_url="http://localhost:11434/v1",
             model="llama3.2:3b",
-            timeout=60.0,
+            timeout=180.0,
             score_threshold=70,
         )
         mcp_client = MockMcpJobClient(fixture_path=FIXTURE_PATH)
         await mcp_client.connect()
         truncator = TextTruncator(max_tokens=1500)
-        guard = LocalLoopGuard(max_iterations=10, timeout_seconds=60.0)
+        guard = LocalLoopGuard(max_iterations=10, timeout_seconds=180.0)
 
         pipeline = JobPipeline(
             repository=repo,

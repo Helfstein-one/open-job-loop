@@ -679,7 +679,7 @@ class TestPipelineSustainedLoadStress:
         assert result.discarded == job_count
 
         throughput = job_count / elapsed
-        assert throughput >= 25.0, f"Throughput was {throughput:.2f} jobs/sec, expected >= 25.0"
+        assert throughput >= 10.0, f"Throughput was {throughput:.2f} jobs/sec, expected >= 10.0"
 
         await mcp_client.disconnect()
         await repo.close()

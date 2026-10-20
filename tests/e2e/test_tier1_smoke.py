@@ -143,10 +143,10 @@ class TestTier1RunOptionValidation:
         assert "--keywords" in clean_out
         assert "--limit" in clean_out
         assert "--threshold" in clean_out
-        assert "--mock" in result.stdout
-        assert "--timeout" in result.stdout
-        assert "--max-iterations" in result.stdout
-        assert "--headless" in result.stdout
+        assert "--mock" in clean_out
+        assert "--timeout" in clean_out
+        assert "--max-iterations" in clean_out
+        assert "--headless" in clean_out
 
     def test_run_invalid_threshold_above_100(self, temp_db_path):
         result = runner.invoke(app, ["run", "--mock", "--threshold", "150", "--db", temp_db_path])
