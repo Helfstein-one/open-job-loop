@@ -8,6 +8,8 @@ with immediate disk checkpoints and zero large arrays in memory.
 
 
 import asyncio
+import json
+import logging
 from pathlib import Path
 import threading
 from typing import Any, List, Optional, Sequence, Tuple
@@ -67,6 +69,21 @@ CREATE TABLE IF NOT EXISTS application_audit_log (
 );
 """
 
+DDL_CREATE_EXECUTION_LOGS_TABLE = """
+CREATE TABLE IF NOT EXISTS execution_logs (
+    id UUID PRIMARY KEY DEFAULT uuid(),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    level VARCHAR NOT NULL,
+    module VARCHAR NOT NULL,
+    message TEXT NOT NULL,
+    metadata JSON
+);
+"""
+
+DDL_CREATE_INDEX_EXECUTION_LOGS_TIMESTAMP = """
+CREATE INDEX IF NOT EXISTS idx_exec_logs_timestamp ON execution_logs (timestamp);
+"""
+
 
 class DatabaseManager:
     """
@@ -120,6 +137,8 @@ class DatabaseManager:
                 conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS channel VARCHAR;")
                 conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;")
                 conn.execute(DDL_CREATE_AUDIT_LOG_TABLE)
+                conn.execute(DDL_CREATE_EXECUTION_LOGS_TABLE)
+                conn.execute(DDL_CREATE_INDEX_EXECUTION_LOGS_TIMESTAMP)
             except Exception:
                 pass
             conn.execute("CHECKPOINT;")
@@ -259,3 +278,72 @@ class DatabaseManager:
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         await self.aclose()
+
+
+class DuckDBLoggingHandler(logging.Handler):
+    """
+    Thread-safe logging handler that persists log records into the DuckDB execution_logs table.
+    Gracefully handles lock contention without interrupting main execution.
+    """
+
+    def __init__(
+        self,
+        db_path: str = "data/open_job_loop.duckdb",
+        db_manager: Optional[DatabaseManager] = None,
+    ) -> None:
+        super().__init__()
+        self.db_path = db_path
+        self.db_manager = db_manager
+        self._lock = threading.Lock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            level = record.levelname
+            module = record.name
+            meta = getattr(record, "metadata", None)
+            meta_json = json.dumps(meta, ensure_ascii=False) if meta else "{}"
+
+            with self._lock:
+                if self.db_manager:
+                    conn = self.db_manager.connect()
+                    conn.execute(
+                        """
+                        INSERT INTO execution_logs (timestamp, level, module, message, metadata)
+                        VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?::JSON);
+                        """,
+                        (level, module, msg, meta_json),
+                    )
+                else:
+                    conn = duckdb.connect(self.db_path, read_only=False)
+                    try:
+                        conn.execute("INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;")
+                    except Exception:
+                        pass
+                    conn.execute(
+                        """
+                        INSERT INTO execution_logs (timestamp, level, module, message, metadata)
+                        VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?::JSON);
+                        """,
+                        (level, module, msg, meta_json),
+                    )
+                    conn.close()
+        except Exception:
+            pass
+
+
+def setup_duckdb_logging(
+    db_path: str = "data/open_job_loop.duckdb",
+    level: int = logging.INFO,
+    db_manager: Optional[DatabaseManager] = None,
+) -> DuckDBLoggingHandler:
+    """
+    Attach DuckDBLoggingHandler to the root 'src' logger to capture all system events.
+    """
+    handler = DuckDBLoggingHandler(db_path=db_path, db_manager=db_manager)
+    handler.setLevel(level)
+    formatter = logging.Formatter("%(message)s")
+    handler.setFormatter(formatter)
+    src_logger = logging.getLogger("src")
+    src_logger.addHandler(handler)
+    return handler

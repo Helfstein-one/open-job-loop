@@ -11,6 +11,7 @@ from src.application.use_cases.profile import ProfileManager
 from src.application.use_cases.active_learning import ActiveLearningService
 from src.infrastructure.adapters.ats.router import get_ats_adapter, detect_channel
 from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.database import setup_duckdb_logging
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,23 @@ class AutoApplyWorker:
             """)
         except Exception:
             pass
+
+        # Garantir criação do log operacional
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS execution_logs (
+                    id UUID PRIMARY KEY DEFAULT uuid(),
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    level VARCHAR NOT NULL,
+                    module VARCHAR NOT NULL,
+                    message TEXT NOT NULL,
+                    metadata JSON
+                );
+            """)
+        except Exception:
+            pass
+
+        setup_duckdb_logging(self.db_path)
 
         profile_manager = ProfileManager(
             db_path=self.db_path,

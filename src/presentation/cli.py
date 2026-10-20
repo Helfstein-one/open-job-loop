@@ -995,6 +995,114 @@ def audit_cmd(
                 pass
 
 
+@app.command(name="logs")
+def logs_cmd(
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="Path to the DuckDB database file.",
+    ),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        "-n",
+        help="Number of log records to show.",
+    ),
+    level: Optional[str] = typer.Option(
+        None,
+        "--level",
+        "-l",
+        help="Filter logs by level (e.g. INFO, WARNING, ERROR).",
+    ),
+    module: Optional[str] = typer.Option(
+        None,
+        "--module",
+        "-m",
+        help="Filter logs by module name substring.",
+    ),
+) -> None:
+    """
+    Display system and worker execution logs from DuckDB execution_logs table.
+    """
+    import duckdb
+    import shutil
+    import tempfile
+
+    if not Path(db_path).exists():
+        console.print(f"[yellow]Banco de dados '{db_path}' não encontrado.[/yellow]")
+        return
+
+    tmp_snapshot = None
+    try:
+        try:
+            conn = duckdb.connect(db_path, read_only=True)
+        except duckdb.IOException:
+            with tempfile.NamedTemporaryFile(suffix=".duckdb", delete=False) as tmp:
+                tmp_snapshot = tmp.name
+            shutil.copyfile(db_path, tmp_snapshot)
+            conn = duckdb.connect(tmp_snapshot, read_only=True)
+
+        try:
+            conn.execute("INSTALL vss; LOAD vss;")
+        except Exception:
+            pass
+
+        exists = conn.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'execution_logs'"
+        ).fetchone()[0]
+        if not exists:
+            console.print("[yellow]Tabela execution_logs ainda não possui registros.[/yellow]")
+            return
+
+        query = "SELECT timestamp, level, module, message FROM execution_logs WHERE 1=1"
+        params: list[Any] = []
+        if level:
+            query += " AND UPPER(level) = ?"
+            params.append(level.upper())
+        if module:
+            query += " AND module LIKE ?"
+            params.append(f"%{module}%")
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(query, params).fetchall()
+
+        if not rows:
+            console.print("[yellow]Nenhum registro encontrado em execution_logs.[/yellow]")
+            return
+
+        table = Table(title="🖥️  System Execution Logs (DuckDB)", border_style="blue")
+        table.add_column("Timestamp", style="dim", width=19)
+        table.add_column("Level", width=9)
+        table.add_column("Module", style="cyan", width=25)
+        table.add_column("Message", style="white")
+
+        for r in rows:
+            ts, lvl, mod, msg = r
+            ts_str = str(ts)[:19] if ts else ""
+            lvl_upper = str(lvl).upper()
+            if lvl_upper == "ERROR":
+                lvl_str = "[bold red]ERROR[/]"
+            elif lvl_upper == "WARNING":
+                lvl_str = "[bold yellow]WARN[/]"
+            else:
+                lvl_str = "[green]INFO[/]"
+
+            table.add_row(ts_str, lvl_str, str(mod)[:25], str(msg))
+
+        console.print(table)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        if tmp_snapshot and os.path.exists(tmp_snapshot):
+            try:
+                os.unlink(tmp_snapshot)
+            except Exception:
+                pass
+
+
 # ==============================================================================
 # Script Entry Point
 # ==============================================================================
