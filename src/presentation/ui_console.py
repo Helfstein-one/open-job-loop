@@ -59,7 +59,7 @@ class UIState:
     limit: int = 10
     threshold: int = 70
     model: str = "llama3.2:3b"
-    db_path: str = "open_job_loop.duckdb"
+    db_path: str = "data/open_job_loop.duckdb"
 
     current_iteration: int = 0
     max_iterations: int = 50

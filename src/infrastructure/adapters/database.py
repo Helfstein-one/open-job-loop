@@ -74,7 +74,7 @@ class DatabaseManager:
     immediate checkpoints, and asynchronous thread offloading.
     """
 
-    def __init__(self, db_path: str = "open_job_loop.duckdb") -> None:
+    def __init__(self, db_path: str = "data/open_job_loop.duckdb") -> None:
         """
         Initialize the database manager.
 

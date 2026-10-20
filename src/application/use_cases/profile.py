@@ -38,7 +38,7 @@ class ProfileManager:
 
     def __init__(
         self,
-        db_path: str = "open_job_loop.duckdb",
+        db_path: str = "data/open_job_loop.duckdb",
         embedding_model: str = "nomic-embed-text",
         llm_model: str = "qwen2.5-coder:3b",
         mock_mode: bool = False,

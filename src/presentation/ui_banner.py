@@ -27,7 +27,7 @@ ASCII_ART = r"""
 TAGLINE = "Privacy-First Local Job Search & Triage Agent"
 DEFAULT_VERSION = "0.1.0"
 DEFAULT_MODEL = "llama3.2:3b"
-DEFAULT_DB = "open_job_loop.duckdb"
+DEFAULT_DB = "data/open_job_loop.duckdb"
 
 
 # ==============================================================================

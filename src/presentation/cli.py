@@ -149,7 +149,7 @@ def banner_cmd(
 @app.command(name="stats")
 def stats_cmd(
     db_path: str = typer.Option(
-        "open_job_loop.duckdb",
+        "data/open_job_loop.duckdb",
         "--db",
         help="Path to the DuckDB database file.",
     ),
@@ -667,7 +667,7 @@ def run_cmd(
         help="Path to JSON file containing mock job postings.",
     ),
     db_path: str = typer.Option(
-        "open_job_loop.duckdb",
+        "data/open_job_loop.duckdb",
         "--db",
         help="DuckDB database file path for immediate persistence.",
     ),

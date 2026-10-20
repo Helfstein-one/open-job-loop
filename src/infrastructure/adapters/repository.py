@@ -53,7 +53,7 @@ class JobRepository:
 
     def __init__(
         self,
-        db_path: str = "open_job_loop.duckdb",
+        db_path: str = "data/open_job_loop.duckdb",
         db_manager: Optional[DatabaseManager] = None
     ) -> None:
         """
