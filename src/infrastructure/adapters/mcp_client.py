@@ -22,6 +22,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from src.infrastructure.adapters.repository import compute_job_hash
 from src.domain.models import JobPosting, JobStatus
+from src.application.ports.job_ingestion import JobIngestionPort
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ def parse_job_payload(
 # Base Client Interface
 # ==============================================================================
 
-class BaseJobIngestionClient(abc.ABC):
+class BaseJobIngestionClient(JobIngestionPort):
     """
     Abstract base class defining the contract for job ingestion clients.
     All ingestion clients (real MCP, mocks, API adapters) must implement this interface.

@@ -27,6 +27,7 @@ from src.infrastructure.adapters.llm_prompts import (
     format_candidate_profile,
 )
 from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
+from src.application.ports.job_evaluator import JobEvaluatorPort
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class LLMModelNotFoundError(LLMError):
     """Raised when the requested model is not found in the Ollama instance (404)."""
 
 
-class JobFitEvaluator:
+class JobFitEvaluator(JobEvaluatorPort):
     """
     Evaluates job postings against candidate profiles using local open-weight LLMs via Instructor.
     """

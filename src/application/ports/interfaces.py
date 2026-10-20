@@ -1,15 +1,25 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
 
-class JobRepository(ABC):
-    @abstractmethod
-    def save(self, job): pass
-    @abstractmethod
-    def get_all(self): pass
+from src.application.ports import (
+    JobRepositoryPort,
+    JobEvaluatorPort,
+    JobIngestionPort,
+    UserProfilePort,
+    AuditLoggerPort,
+    ATSAdapterPort,
+    JobRepository,
+    LLMClient,
+    JobSearch,
+)
 
-class LLMClient(ABC):
-    @abstractmethod
-    def evaluate(self, prompt): pass
-
-class JobSearch(ABC):
-    @abstractmethod
-    def search(self, query): pass
+__all__ = [
+    "JobRepositoryPort",
+    "JobEvaluatorPort",
+    "JobIngestionPort",
+    "UserProfilePort",
+    "AuditLoggerPort",
+    "ATSAdapterPort",
+    "JobRepository",
+    "LLMClient",
+    "JobSearch",
+]

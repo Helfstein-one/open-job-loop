@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.domain.models import ApplicationChannel
 from src.application.use_cases.active_learning import ActiveLearningService
+from src.application.ports.form_filler import ATSAdapterPort
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,16 @@ class ApplicationResult(BaseModel):
     error_message: Optional[str] = Field(default=None, description="Error message if execution failed.")
 
 
-class BaseATSAdapter(abc.ABC):
+class BaseATSAdapter(ATSAdapterPort):
     """
     Abstract base class for platform-specific ATS adapters.
     """
 
     channel: ApplicationChannel
+
+    def can_handle(self, url: str) -> bool:
+        """Alias adhering to ATSAdapterPort contract."""
+        return self.matches_url(url)
 
     @abc.abstractmethod
     def matches_url(self, url: str) -> bool:

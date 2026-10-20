@@ -14,6 +14,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from src.infrastructure.adapters.database import DatabaseManager
 from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation, ApplicationChannel
+from src.application.ports.job_repository import JobRepositoryPort
 
 
 def compute_job_hash(
@@ -45,7 +46,7 @@ def compute_job_hash(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-class JobRepository:
+class JobRepository(JobRepositoryPort):
     """
     Repository providing persistence, deduplication, and lifecycle updates
     for JobPosting domain entities backed by DuckDB.

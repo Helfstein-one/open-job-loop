@@ -899,6 +899,184 @@ def run_cmd(
         raise typer.Exit(code=exit_code)
 
 
+INTERNATIONAL_ROTATIONS = [
+    {"location": "United States", "keywords": "Senior Python Engineer"},
+    {"location": "European Union", "keywords": "Senior Python Engineer"},
+    {"location": "United States", "keywords": "Staff Software Engineer Python"},
+    {"location": "European Union", "keywords": "Senior Backend Engineer Python"},
+    {"location": "Worldwide", "keywords": "Senior Python Engineer"},
+]
+
+
+@app.command(name="batch-run")
+def batch_run_cmd(
+    cycles: int = typer.Option(
+        5,
+        "--cycles",
+        "-c",
+        help="Number of multi-query rotation cycles (e.g. 5 for 500 jobs total).",
+    ),
+    limit_per_cycle: int = typer.Option(
+        100,
+        "--limit",
+        "-n",
+        help="Number of job postings to discover and triage per cycle.",
+    ),
+    apply: bool = typer.Option(
+        True,
+        "--apply/--no-apply",
+        help="Automatically trigger auto-apply worker for shortlisted jobs in each cycle.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="Simulate form filling without official submission.",
+    ),
+    resume_path: str = typer.Option(
+        "data/resume.pdf",
+        "--resume-path",
+        "-r",
+        help="Path to candidate resume PDF for automatic attachment.",
+    ),
+    threshold: int = typer.Option(
+        70,
+        "--threshold",
+        "-t",
+        help="Minimum candidate fit score (0-100) to shortlist.",
+    ),
+    db_path: str = typer.Option(
+        "data/open_job_loop.duckdb",
+        "--db",
+        help="DuckDB database path.",
+    ),
+    base_url: str = typer.Option(
+        os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        "--base-url",
+        help="Base URL for local LLM endpoint.",
+    ),
+) -> None:
+    """
+    Execute autonomous multi-query international batch rotation (US/EU/Global).
+    Rotates queries to discover up to 500+ jobs without hitting pagination limits.
+    """
+    async def _execute_batch() -> int:
+        setup_duckdb_logging(db_path=db_path)
+        console.print(
+            Panel(
+                f"[bold cyan]Starting Multi-Query International Batch Execution[/]\n"
+                f"Cycles: [bold]{cycles}[/] | Target per Cycle: [bold]{limit_per_cycle}[/] "
+                f"| Total Potential Jobs: [bold]{cycles * limit_per_cycle}[/]\n"
+                f"Mode: [bold]{'DRY-RUN' if dry_run else 'PRODUCTION REAL'}[/] | Auto-Apply: [bold]{apply}[/]",
+                title="[bold green]500 International Jobs Runner[/]",
+                border_style="cyan",
+            )
+        )
+
+        candidate_profile = CandidateProfile(
+            name="Maurício Helfstein Gonçalves",
+            target_role="Senior Python Engineer",
+            years_experience=7,
+            primary_skills=["Python", "FastAPI", "Asyncio", "DuckDB", "SQLModel"],
+            secondary_skills=["Docker", "Ollama", "Instructor", "PostgreSQL"],
+            summary="Senior Python Engineer with 7+ years building distributed backend systems, FastAPI, DuckDB, Asyncio, and LLM agent tooling.",
+        )
+
+        total_discovered = 0
+        total_shortlisted = 0
+        total_applied = 0
+        truncator = TextTruncator()
+
+        for cycle_idx in range(cycles):
+            rot = INTERNATIONAL_ROTATIONS[cycle_idx % len(INTERNATIONAL_ROTATIONS)]
+            kw = rot["keywords"]
+            loc = rot["location"]
+            console.rule(f"[bold magenta]Cycle {cycle_idx + 1}/{cycles}: {kw} ({loc})[/]")
+
+            repo = JobRepository(db_path=db_path)
+            await repo.initialize()
+
+            evaluator = CascadeJobEvaluator(
+                base_url=base_url,
+                model_fast=DEFAULT_FAST_MODEL,
+                model_deep=DEFAULT_DEEP_MODEL,
+                timeout=30.0,
+            )
+
+            mcp_client = McpJobClient(
+                command="uvx",
+                args=["mcp-server-linkedin@latest"],
+                tool_name="search_jobs",
+                default_tool_args={
+                    "keywords": kw,
+                    "location": loc,
+                    "easy_apply": True,
+                },
+            )
+            await mcp_client.connect()
+
+            guard = LocalLoopGuard(
+                max_iterations=limit_per_cycle + 20,
+                timeout_seconds=30.0,
+                repository=repo,
+            )
+
+            try:
+                pipeline = JobPipeline(
+                    repository=repo,
+                    evaluator=evaluator,
+                    ingestion_client=mcp_client,
+                    truncator=truncator,
+                    guard=guard,
+                    candidate_profile=candidate_profile,
+                    score_threshold=threshold,
+                )
+                res = await pipeline.run(limit=limit_per_cycle)
+                metrics = res.to_dict()
+                total_discovered += metrics.get("discovered", 0)
+                cycle_shortlisted = metrics.get("shortlisted", 0)
+                total_shortlisted += cycle_shortlisted
+                console.print(
+                    f"  [green]Ingested:[/] {metrics.get('ingested', 0)} | "
+                    f"[yellow]Duplicates:[/] {metrics.get('duplicates', 0)} | "
+                    f"[bold cyan]Shortlisted:[/] {cycle_shortlisted}"
+                )
+            finally:
+                await mcp_client.disconnect()
+                await evaluator.close()
+                await repo.close()
+
+            if apply and cycle_shortlisted > 0:
+                console.print("  [bold green]Triggering autonomous Auto-Apply for shortlisted jobs...[/]")
+                worker = AutoApplyWorker(
+                    db_path=db_path,
+                    headless=True,
+                    dry_run=dry_run,
+                    resume_path=resume_path,
+                )
+                apply_stats = await worker.run(limit=limit_per_cycle)
+                total_applied += apply_stats.get("applied", 0)
+                console.print(
+                    f"  [bold green]Auto-Apply Result:[/] Applied: [bold]{apply_stats.get('applied', 0)}[/], "
+                    f"Skipped: [bold]{apply_stats.get('skipped', 0)}[/], Failed: [bold]{apply_stats.get('failed', 0)}[/]"
+                )
+
+        console.print(
+            Panel(
+                f"[bold green]Batch Execution Finished Successfully![/]\n"
+                f"Discovered Postings: [bold]{total_discovered}[/]\n"
+                f"Total Shortlisted: [bold]{total_shortlisted}[/]\n"
+                f"Total Applications Submitted: [bold]{total_applied}[/]",
+                title="[bold green]Summary of 500 International Jobs Batch[/]",
+                border_style="green",
+            )
+        )
+        return 0
+
+    exit_code = run_sync(_execute_batch())
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
+
+
 @app.command(name="audit")
 def audit_cmd(
     db_path: str = typer.Option(

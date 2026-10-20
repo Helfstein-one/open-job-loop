@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any
 import duckdb
+from src.application.ports.user_profile import UserProfilePort
 import yaml
 from openai import AsyncOpenAI
 
@@ -30,7 +31,7 @@ def compute_mock_embedding(text: str, dim: int = 768) -> List[float]:
     return [round(x / norm, 6) for x in vec]
 
 
-class ProfileManager:
+class ProfileManager(UserProfilePort):
     """
     Gerencia o perfil do candidato, dados profissionais e respostas padrão.
     Vetoriza trechos semânticos no DuckDB VSS para consulta em RAG durante auto-apply.
@@ -381,3 +382,8 @@ class ProfileManager:
         res = conn.execute("SELECT category, content FROM user_profile ORDER BY category").fetchall()
         conn.close()
         return [{"category": r[0], "content": r[1]} for r in res]
+
+    # Port aliases
+    store_chunk = add_chunk
+    search_relevant_chunks = search_profile
+    get_candidate_bio = _get_cached_bio

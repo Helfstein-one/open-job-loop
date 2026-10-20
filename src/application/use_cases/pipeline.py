@@ -33,13 +33,16 @@ from src.application.use_cases.harness import (
     LocalLoopGuard,
 )
 from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.application.ports import (
+    JobRepositoryPort,
+    JobEvaluatorPort,
+    JobIngestionPort,
+)
+from src.infrastructure.adapters.repository import compute_job_hash
 from src.infrastructure.adapters.llm_evaluator import (
-    JobFitEvaluator,
     LLMConnectionError,
     LLMTimeoutError,
 )
-from src.infrastructure.adapters.mcp_client import BaseJobIngestionClient
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
@@ -183,16 +186,16 @@ class JobPipeline:
 
     def __init__(
         self,
-        repository: JobRepository,
-        evaluator: JobFitEvaluator,
-        ingestion_client: BaseJobIngestionClient | None = None,
+        repository: JobRepositoryPort,
+        evaluator: JobEvaluatorPort,
+        ingestion_client: JobIngestionPort | None = None,
         candidate_profile: CandidateProfile | str | dict[str, Any] | None = None,
         truncator: TextTruncator | None = None,
         guard: LocalLoopGuard | None = None,
         config: PipelineConfig | None = None,
         score_threshold: int | None = None,
         listeners: list[PipelineCallback] | None = None,
-        mcp_client: BaseJobIngestionClient | None = None,
+        mcp_client: JobIngestionPort | None = None,
         ui_listener: Any | None = None,
     ) -> None:
         """

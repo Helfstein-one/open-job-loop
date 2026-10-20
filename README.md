@@ -134,53 +134,67 @@ python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --
 python -m src.presentation.cli run --model-fast llama3.2:1b --model-deep qwen2.5-coder:3b
 ```
 
-### 6. Auditoria Completa de Submissões no DuckDB
-Todas as candidaturas enviadas (perguntas respondidas, canal, timestamp e status) são registradas com integridade na tabela `application_audit_log`:
+### 6. Execução em Lote Internacional (US / EU / Global) - 500+ Vagas
+Para cobrir centenas de vagas internacionais sem estourar limites de paginação do LinkedIn, utilize a rotação inteligente de queries:
+```bash
+# Executa 5 rotações de 100 vagas (500 vagas potenciais) nos EUA, Europa e Global com Auto-Apply real:
+python -m src.presentation.cli batch-run --cycles 5 --limit 100 --apply
+
+# Simulação Dry-Run para inspeção de formulários internacionais:
+python -m src.presentation.cli batch-run --cycles 5 --limit 100 --apply --dry-run
+```
+
+### 7. Auditoria Completa de Submissões e Logs no DuckDB
+Todas as candidaturas enviadas (perguntas respondidas, canal, timestamp e status) e logs do sistema são registrados no DuckDB:
 ```bash
 # Visualizar histórico de candidaturas submetidas e campos preenchidos
 python -m src.presentation.cli audit
 
-# Filtrar por canal específico (ex: LINKEDIN_EASY_APPLY)
-python -m src.presentation.cli audit --channel LINKEDIN_EASY_APPLY --limit 20
+# Visualizar logs operacionais do sistema
+python -m src.presentation.cli logs --limit 20
 ```
 
-### 7. Estatísticas e Métricas da Base
+### 8. Estatísticas e Métricas da Base
 ```bash
 python -m src.presentation.cli stats
 ```
 
 ---
 
-## 🏛 Estrutura do Código (Arquitetura Hexagonal)
+## 🏛 Estrutura do Código (Arquitetura Hexagonal & SOLID Estrita)
+
+O sistema segue rigorosamente os princípios de **Clean Architecture / Ports & Adapters**, desacoplando a camada de aplicação da infraestrutura através do Princípio da Inversão de Dependência (DIP):
 
 ```text
 src/
 ├── domain/                      # Entidades de Domínio e Schemas Pydantic
 │   └── models.py                # JobPosting, CandidateProfile, ApplicationChannel
-├── application/                 # Casos de Uso e Portas
-│   ├── ports/                   # Interfaces abstratas
-│   └── use_cases/               # Lógica de aplicação
-│       ├── onboard.py           # Profiler Agent & Entrevista Grill-Me
-│       ├── profile.py           # ProfileManager & DuckDB VSS Engine
-│       ├── auto_apply.py        # FormFiller Agent Multi-Canal
-│       ├── active_learning.py   # ActiveLearningService (perguntas em tempo real)
-│       ├── pipeline.py          # Closed-loop DAG Pipeline
+├── application/                 # Camada de Aplicação (Ports & Use Cases)
+│   ├── ports/                   # Contratos Abstratos (Driven / Driving Ports)
+│   │   ├── job_repository.py    # JobRepositoryPort (Persistência e Deduplicação)
+│   │   ├── job_evaluator.py     # JobEvaluatorPort (Inferência e Triagem)
+│   │   ├── job_ingestion.py     # JobIngestionPort (Busca Multi-Fonte)
+│   │   ├── user_profile.py      # UserProfilePort (Vetorização VSS e RAG)
+│   │   ├── audit_logger.py      # AuditLoggerPort (Auditoria e Logs de Sistema)
+│   │   └── form_filler.py       # ATSAdapterPort (Automação de Formulários)
+│   └── use_cases/               # Orquestração e Lógica de Negócio
+│       ├── pipeline.py          # Closed-loop DAG Pipeline (depende estritamente dos Ports)
+│       ├── auto_apply.py        # Worker Autônomo Multi-Canal
+│       ├── active_learning.py   # Resposta em Tempo Real e Auto-Aprendizado
+│       ├── profile.py           # Gestor de Perfil do Candidato
+│       ├── onboard.py           # Entrevista e Ingestão de CV
 │       ├── harness.py           # LocalLoopGuard & Circuit Breaker
 │       └── truncator.py         # TextTruncator & Sanitizador
-├── infrastructure/              # Adaptadores de Entrada/Saída
+├── infrastructure/              # Adaptadores de Entrada/Saída (Implementam os Ports)
 │   └── adapters/
-│       ├── repository.py        # Repositório DuckDB
-│       ├── llm_evaluator.py     # Avaliador LLM (Instructor + Ollama)
-│       ├── mcp_client.py        # Cliente MCP LinkedIn
-│       ├── mcp_mock_client.py   # Mock MCP para testes offline
-│       └── ats/                 # Adaptadores de ATS Externos
-│           ├── base.py          # BaseATSAdapter & FormField
-│           ├── greenhouse.py    # Greenhouse Adapter
-│           ├── lever.py         # Lever Adapter
-│           ├── ashby.py         # Ashby Adapter
-│           └── router.py        # Roteamento e Detecção de Canal
-└── presentation/                # Camada de Interface CLI
-    ├── cli.py                   # Typer CLI principal
+│       ├── repository.py        # JobRepository (DuckDB) -> JobRepositoryPort
+│       ├── cascade_evaluator.py # CascadeJobEvaluator -> JobEvaluatorPort
+│       ├── llm_evaluator.py     # JobFitEvaluator -> JobEvaluatorPort
+│       ├── mcp_client.py        # McpJobClient (LinkedIn) -> JobIngestionPort
+│       ├── database.py          # DatabaseManager & DuckDBLoggingHandler
+│       └── ats/                 # Greenhouse, Lever, Ashby -> ATSAdapterPort
+└── presentation/                # Adaptadores Primários (CLI e Banner)
+    ├── cli.py                   # Typer CLI (run, batch-run, apply, audit, logs, stats)
     ├── ui_console.py            # Rich Live Dashboard
     └── ui_banner.py             # ASCII Art Banner
 ```

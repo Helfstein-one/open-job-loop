@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2026-10-20
+### Added
+- **Strict Hexagonal Architecture & SOLID Compliance (`src/application/ports/`)**:
+  - Created formal abstract Port contracts:
+    - `JobRepositoryPort`: Persistence, O(1) RAM streaming, and atomic SHA-256 deduplication.
+    - `JobEvaluatorPort`: Candidate-job fit evaluation and structured MatchEvaluation extraction.
+    - `JobIngestionPort`: Multi-source job search and normalization contract.
+    - `UserProfilePort`: Semantic profile storage, DuckDB VSS cosine search, and RAG answer synthesis.
+    - `AuditLoggerPort`: Application audit trail and operational logging contract.
+    - `ATSAdapterPort`: Multi-channel ATS automation interface (`matches_url`, `can_handle`, `fill_and_submit`).
+  - Decoupled `JobPipeline`, `AutoApplyWorker`, `ProfileManager`, and ATS adapters from concrete infrastructure classes via the Dependency Inversion Principle (DIP).
+- **Multi-Query International Batch Runner (`jobloop batch-run`)**:
+  - High-throughput batch rotation engine designed for 500+ jobs across US, EU, and Global markets.
+  - Automated rotation of locations (`United States`, `European Union`, `Worldwide`) and keywords (`Senior Python Engineer`, `Staff Software Engineer Python`, `Senior Backend Engineer Python`) to prevent pagination truncation.
+  - Pipeline cycle streaming: Discover -> Cascade Triage -> Immediate Autonomous Auto-Apply -> DuckDB Checkpoint.
+- **Resilient DuckDB Concurrency & Execution Logging**:
+  - `execution_logs` table and `DuckDBLoggingHandler` logging all events in real time.
+  - Exponential retry loop on file lock collisions in `DatabaseManager.connect()`.
+  - CLI command `jobloop logs` for live terminal log inspection.
+
 ## [2.3.0] - 2026-10-20
 ### Added
 - **Native LinkedIn Easy Apply Filtering**:
