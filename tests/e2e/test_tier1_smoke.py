@@ -11,6 +11,7 @@ Validates:
 from __future__ import annotations
 
 import re
+
 import pytest
 from typer.testing import CliRunner
 
