@@ -213,22 +213,66 @@ class AutoApplyWorker:
                                     except Exception:
                                         pass
 
-                            # Identifica labels de campos de entrada de texto
+                            # Identifica labels de campos de entrada (input, textarea, select)
                             labels = await page.locator("label.artdeco-text-input--label, label[for]").all()
                             for label in labels:
                                 question_text = (await label.inner_text()).strip()
                                 input_id = await label.get_attribute("for")
                                 if input_id and question_text:
                                     input_element = page.locator(f"#{input_id}")
-                                    if await input_element.count() > 0 and await input_element.is_editable():
-                                        current_val = await input_element.input_value()
-                                        if not current_val:
-                                            answer = await active_learning.get_or_learn_answer(
-                                                question_text,
-                                                job_context=job_ctx,
-                                            )
-                                            await input_element.fill(str(answer))
-                                            logger.info(f"  [Campo Respondido (Active Learning RAG)] '{question_text}' -> '{answer}'")
+                                    if await input_element.count() > 0:
+                                        tag_name = await input_element.evaluate("el => el.tagName.toLowerCase()")
+                                        if tag_name == "select":
+                                            val = await input_element.input_value()
+                                            if not val or val in ["Select an option", ""]:
+                                                answer = await active_learning.get_or_learn_answer(
+                                                    question_text,
+                                                    job_context=job_ctx,
+                                                )
+                                                selected = False
+                                                for opt in await input_element.locator("option").all():
+                                                    opt_text = (await opt.inner_text()).strip()
+                                                    if (
+                                                        answer.lower() == opt_text.lower()
+                                                        or answer.lower() in opt_text.lower()
+                                                        or opt_text.lower() in answer.lower()
+                                                    ):
+                                                        opt_val = await opt.get_attribute("value")
+                                                        if opt_val:
+                                                            await input_element.select_option(value=opt_val)
+                                                            selected = True
+                                                            break
+                                                if not selected:
+                                                    try:
+                                                        await input_element.select_option(label=str(answer))
+                                                    except Exception:
+                                                        pass
+                                                logger.info(f"  [Dropdown Selecionado] '{question_text}' -> '{answer}'")
+                                        elif await input_element.is_editable():
+                                            current_val = await input_element.input_value()
+                                            if not current_val:
+                                                answer = await active_learning.get_or_learn_answer(
+                                                    question_text,
+                                                    job_context=job_ctx,
+                                                )
+                                                await input_element.fill(str(answer))
+                                                logger.info(f"  [Campo Respondido (Active Learning RAG)] '{question_text}' -> '{answer}'")
+
+                            # Identifica perguntas de rádio/opções (fieldset)
+                            fieldsets = await page.locator("fieldset").all()
+                            for fs in fieldsets:
+                                legend = fs.locator("legend").first
+                                if await legend.count() > 0:
+                                    q_text = (await legend.inner_text()).strip()
+                                    if q_text:
+                                        answer = await active_learning.get_or_learn_answer(q_text, job_context=job_ctx)
+                                        target_radio = fs.locator(f"label:has-text('{answer}')").first
+                                        if await target_radio.count() > 0:
+                                            try:
+                                                await target_radio.click()
+                                                logger.info(f"  [Radio Selecionado] '{q_text}' -> '{answer}'")
+                                            except Exception:
+                                                pass
 
                             submit_button = page.locator(
                                 "button:has-text('Submit application'), button:has-text('Enviar candidatura')"

@@ -235,6 +235,30 @@ class ProfileManager:
         conn.close()
         logger.info(f"Novo fragmento [{category}] indexado no DuckDB VSS com sucesso.")
 
+    def _get_cached_bio(self) -> Dict[str, str]:
+        if hasattr(self, "_cached_bio_data") and self._cached_bio_data:
+            return self._cached_bio_data
+        data = {}
+        try:
+            conn = self._get_connection()
+            row = conn.execute("SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;").fetchone()
+            conn.close()
+            if row and row[0]:
+                text = row[0]
+                import re
+                m_name = re.search(r"Candidate Name:\s*([^.]+)\.", text)
+                if m_name: data["name"] = m_name.group(1).strip()
+                m_email = re.search(r"Email:\s*([^\s]+)", text)
+                if m_email: data["email"] = m_email.group(1).rstrip(".").strip()
+                m_phone = re.search(r"Phone:\s*([^.]+)\.", text)
+                if m_phone: data["phone"] = m_phone.group(1).strip()
+                m_linkedin = re.search(r"LinkedIn:\s*([^\s]+)", text)
+                if m_linkedin: data["linkedin"] = m_linkedin.group(1).rstrip(".").strip()
+        except Exception:
+            pass
+        self._cached_bio_data = data
+        return data
+
     async def synthesize_answer_with_confidence(
         self,
         question: str,
@@ -244,14 +268,44 @@ class ProfileManager:
         """
         Consulta DuckDB VSS e gera resposta com estimativa de confiança [0.0 a 1.0].
         """
-        matches = await self.search_profile(question, limit=2)
+        # Resolução determinística imediata para dados de contato
+        q_lower = question.lower()
+        bio_info = self._get_cached_bio()
+        if any(w in q_lower for w in ["nome completo", "full name", "first name", "seu nome", "candidate name"]):
+            if bio_info.get("name"):
+                return bio_info["name"], 1.0
+
+        if any(w in q_lower for w in ["e-mail", "email", "seu email"]):
+            if bio_info.get("email"):
+                return bio_info["email"], 1.0
+
+        if any(w in q_lower for w in ["telefone", "phone", "whatsapp", "celular", "mobile"]):
+            if bio_info.get("phone"):
+                return bio_info["phone"], 1.0
+
+        if any(w in q_lower for w in ["linkedin", "perfil do linkedin"]):
+            if bio_info.get("linkedin"):
+                return bio_info["linkedin"], 1.0
+
+        matches = await self.search_profile(question, limit=4)
         if not matches:
             return "N/A", 0.0
 
         best_distance = matches[0].get("distance", 1.0)
         confidence = max(0.0, min(1.0, 1.0 - best_distance))
 
-        context_str = "\n".join([f"[{m['category']}] {m['content']}" for m in matches])
+        # Sempre inclui personal_bio na base de contexto
+        bio_prefix = ""
+        try:
+            conn = self._get_connection()
+            row = conn.execute("SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;").fetchone()
+            conn.close()
+            if row and row[0]:
+                bio_prefix = f"[personal_bio] {row[0]}\n"
+        except Exception:
+            pass
+
+        context_str = bio_prefix + "\n".join([f"[{m['category']}] {m['content']}" for m in matches])
 
         # Se estiver em modo mock ou sem Ollama, extrai de forma heurística limpa
         if self.mock_mode:
