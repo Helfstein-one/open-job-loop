@@ -12,6 +12,7 @@ import json
 import logging
 from pathlib import Path
 import threading
+import time
 from typing import Any, List, Optional, Sequence, Tuple
 
 import duckdb
@@ -113,7 +114,17 @@ class DatabaseManager:
                 if not self._is_memory:
                     parent_dir = Path(self.db_path).resolve().parent
                     parent_dir.mkdir(parents=True, exist_ok=True)
-                self._conn = duckdb.connect(self.db_path, read_only=False)
+                
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        self._conn = duckdb.connect(self.db_path, read_only=False)
+                        break
+                    except duckdb.IOException as e:
+                        if "lock on file" in str(e).lower() and attempt < max_retries - 1:
+                            time.sleep(1.0)
+                            continue
+                        raise
                 # Configure pragmas for performance and durability
                 self._conn.execute("PRAGMA threads=4;")
                 try:
