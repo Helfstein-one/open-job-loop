@@ -82,7 +82,7 @@ class JobFitEvaluator(JobEvaluatorPort):
         :param timeout: Wall-clock timeout in seconds per evaluation (default 30.0).
         :param max_retries: Transient retry count (default 2).
         :param temperature: Sampling temperature for deterministic scoring (default 0.0).
-        :param score_threshold: Minimum fit score for SHORTLIST recommendation (default 70).
+        :param score_threshold: Minimum fit score for SHORTLIST recommendation (default 60).
         :param system_prompt: Optional override for system prompt instructions.
         :param client: Optional pre-configured instructor.AsyncInstructor instance for dependency injection.
         :param enforce_threshold_consistency: Automatically align recommendation with score_threshold.

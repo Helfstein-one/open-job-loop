@@ -645,7 +645,7 @@ def run_cmd(
         help="Maximum number of job postings to process.",
     ),
     threshold: int = typer.Option(
-        70,
+        60,
         "--threshold",
         "-t",
         min=0,
@@ -939,7 +939,7 @@ def batch_run_cmd(
         help="Path to candidate resume PDF for automatic attachment.",
     ),
     threshold: int = typer.Option(
-        70,
+        60,
         "--threshold",
         "-t",
         help="Minimum candidate fit score (0-100) to shortlist.",

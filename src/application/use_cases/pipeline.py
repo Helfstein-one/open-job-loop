@@ -102,7 +102,7 @@ class PipelineConfig:
     """
     Operational configuration for JobPipeline execution.
     """
-    score_threshold: int = 70
+    score_threshold: int = 60
     batch_size: int = 10
     max_iterations: int = 50
     timeout_seconds: float = 15.0
@@ -209,7 +209,7 @@ class JobPipeline:
             truncator: Optional TextTruncator instance.
             guard: Optional LocalLoopGuard instance for iteration & timeout bounding.
             config: Optional PipelineConfig instance.
-            score_threshold: Optional override for shortlist threshold (defaults to config or 70).
+            score_threshold: Optional override for shortlist threshold (defaults to config or 60).
             listeners: Optional list of event telemetry callbacks.
             mcp_client: Alias for ingestion_client.
             ui_listener: Optional UI manager (e.g. BasePipelineUI) to receive telemetry.

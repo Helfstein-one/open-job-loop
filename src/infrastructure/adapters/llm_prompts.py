@@ -10,7 +10,7 @@ from typing import Any
 from src.domain.models import CandidateProfile
 
 JOB_POSTING_TAG = "job_posting"
-DEFAULT_FIT_THRESHOLD = 70
+DEFAULT_FIT_THRESHOLD = 60
 
 DEFAULT_SYSTEM_PROMPT = """You are an objective, expert technical recruiter and talent evaluation engine.
 Your task is to evaluate the technical fit between a candidate profile and a target job posting.
@@ -22,8 +22,8 @@ EVALUATION INSTRUCTIONS:
    - 60-79: Moderate match; partial skills or transferable technical background.
    - 0-59: Poor match; missing critical required skills, core languages, or misaligned domain.
 3. Determine the recommendation:
-   - 'SHORTLIST' if fit_score >= 70.
-   - 'DISCARD' if fit_score < 70.
+   - 'SHORTLIST' if fit_score >= 60.
+   - 'DISCARD' if fit_score < 60.
 4. Extract matched_skills: Skills required by the job that the candidate explicitly possesses.
 5. Extract missing_skills: Skills required by the job that are absent from the candidate profile.
 6. Provide a concise reasoning summary justifying the fit score and recommendation.

@@ -57,7 +57,7 @@ class UIState:
     keywords: str = "Python Software Engineer"
     location: str = "Remote"
     limit: int = 10
-    threshold: int = 70
+    threshold: int = 60
     model: str = "llama3.2:3b"
     db_path: str = "data/open_job_loop.duckdb"
 

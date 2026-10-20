@@ -137,7 +137,7 @@ class TestPipelineInitialization:
         assert pipeline.repository is repo_memory
         assert pipeline.evaluator is evaluator
         assert pipeline.ingestion_client is client
-        assert pipeline.score_threshold == 70
+        assert pipeline.score_threshold == 60
         assert pipeline.candidate_profile == DEFAULT_CANDIDATE_PROFILE
 
     def test_custom_config_and_threshold(self, repo_memory: JobRepository, sample_candidate: CandidateProfile):

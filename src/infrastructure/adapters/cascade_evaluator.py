@@ -49,7 +49,7 @@ class CascadeJobEvaluator(JobFitEvaluator):
         api_key: str = "ollama",
         timeout: float = 30.0,
         fast_timeout: float = 8.0,
-        score_threshold: int = 70,
+        score_threshold: int = 60,
         vss_min_similarity: float = 0.35,
         db_path: Optional[str] = None,
         enable_vss_prefilter: bool = True,
