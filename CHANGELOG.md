@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2026-10-20
+### Added
+- **Open APIs Job Ingestion Adapter (`OpenApisJobClient`)**:
+  - Direct integration with open public developer job APIs: Jobicy (US, UK, EMEA), Arbeitnow (EU & Global Remote), and Remotive.
+  - Zero authentication or rate-limit constraints for massive job discovery (1,000+ postings).
+  - Robust HTML-to-prose sanitization (`clean_html_text`) and SHA-256 content deduplication.
+- **LinkedIn Anti-Bot Safety Guard & Throttling (`AutoApplyWorker`)**:
+  - Enforced daily safety cap of 20 LinkedIn Easy Apply submissions per rolling 24-hour window tracked in DuckDB `application_audit_log`.
+  - Humanized jitter delays (15 to 45 seconds randomized sleep) between LinkedIn application steps.
+  - Proactive Checkpoint and Auth Challenge detection (`/uas/login`, `/checkpoint/`, `/challenge/`) with automatic session isolation to prevent account restrictions.
+- **Hybrid Ingestion Port Adapter (`HybridJobClient`)**:
+  - Unifies massive open-source discovery with surgical LinkedIn MCP queries under `JobIngestionPort`.
+  - Fault isolation: automatically isolates LinkedIn failures without interrupting downstream pipeline execution.
+- **1,000 International Jobs Batch Rotation (`jobloop batch-run`)**:
+  - Expanded search rotation matrix across United States, United Kingdom, and European Union.
+  - Triage score threshold updated to 60% across LLM prompts, evaluators, pipeline, and CLI options.
+
 ## [2.4.0] - 2026-10-20
 ### Added
 - **Strict Hexagonal Architecture & SOLID Compliance (`src/application/ports/`)**:

@@ -37,6 +37,7 @@ from src.infrastructure.adapters.cascade_evaluator import (
 )
 from src.infrastructure.adapters.mcp_client import BaseJobIngestionClient, McpJobClient
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.open_apis_ingestion import OpenApisJobClient, HybridJobClient
 from src.domain.models import CandidateProfile
 from src.application.use_cases.profile import ProfileManager
 from src.application.use_cases.auto_apply import AutoApplyWorker
@@ -745,6 +746,12 @@ def run_cmd(
         "-r",
         help="Path to candidate base resume PDF for automatic upload.",
     ),
+    source: str = typer.Option(
+        "hybrid",
+        "--source",
+        "-s",
+        help="Job discovery source: 'hybrid' (Open APIs + safe LinkedIn), 'open' (Open APIs only), or 'linkedin'.",
+    ),
 ) -> None:
     """
     Execute the autonomous closed-loop pipeline (Discover -> Dedup -> Truncate -> Triage -> Decision Tree).
@@ -812,7 +819,7 @@ def run_cmd(
 
             truncator = TextTruncator(max_tokens=1500)
 
-            mcp_client: BaseJobIngestionClient
+            mcp_client: Any
             if mock:
                 if fixture and Path(fixture).exists():
                     mcp_client = MockMcpJobClient(fixture_path=fixture)
@@ -820,7 +827,9 @@ def run_cmd(
                     mcp_client = MockMcpJobClient(fixture_path="fixtures/golden_jobs.json")
                 else:
                     mcp_client = MockMcpJobClient(jobs=BUILTIN_MOCK_JOBS)
-            else:
+            elif source == "open":
+                mcp_client = OpenApisJobClient(keywords=keywords, location=location)
+            elif source == "linkedin":
                 mcp_client = McpJobClient(
                     command="uvx",
                     args=["mcp-server-linkedin@latest"],
@@ -831,6 +840,19 @@ def run_cmd(
                         "easy_apply": easy_apply,
                     },
                 )
+            else:  # hybrid
+                open_c = OpenApisJobClient(keywords=keywords, location=location)
+                li_c = McpJobClient(
+                    command="uvx",
+                    args=["mcp-server-linkedin@latest"],
+                    tool_name="search_jobs",
+                    default_tool_args={
+                        "keywords": keywords,
+                        "location": location,
+                        "easy_apply": easy_apply,
+                    },
+                )
+                mcp_client = HybridJobClient(open_client=open_c, linkedin_client=li_c, enable_linkedin=True)
 
             await mcp_client.connect()
 
@@ -961,6 +983,12 @@ def batch_run_cmd(
         "--base-url",
         help="Base URL for local LLM endpoint.",
     ),
+    source: str = typer.Option(
+        "hybrid",
+        "--source",
+        "-s",
+        help="Job discovery source: 'hybrid' (Open APIs + LinkedIn), 'open' (Open APIs only), or 'linkedin'.",
+    ),
 ) -> None:
     """
     Execute autonomous multi-query international batch rotation (US/UK/EU).
@@ -1009,17 +1037,34 @@ def batch_run_cmd(
                 timeout=30.0,
             )
 
-            mcp_client = McpJobClient(
-                command="uvx",
-                args=["mcp-server-linkedin@latest"],
-                tool_name="search_jobs",
-                default_tool_args={
-                    "keywords": kw,
-                    "location": loc,
-                    "easy_apply": True,
-                },
-            )
-            await mcp_client.connect()
+            if source == "open":
+                ingestion_client: BaseJobIngestionClient = OpenApisJobClient(keywords=kw, location=loc)
+            elif source == "linkedin":
+                ingestion_client = McpJobClient(
+                    command="uvx",
+                    args=["mcp-server-linkedin@latest"],
+                    tool_name="search_jobs",
+                    default_tool_args={
+                        "keywords": kw,
+                        "location": loc,
+                        "easy_apply": True,
+                    },
+                )
+            else:  # hybrid (Open APIs + safe LinkedIn)
+                open_c = OpenApisJobClient(keywords=kw, location=loc)
+                li_c = McpJobClient(
+                    command="uvx",
+                    args=["mcp-server-linkedin@latest"],
+                    tool_name="search_jobs",
+                    default_tool_args={
+                        "keywords": kw,
+                        "location": loc,
+                        "easy_apply": True,
+                    },
+                )
+                ingestion_client = HybridJobClient(open_client=open_c, linkedin_client=li_c, enable_linkedin=True)
+
+            await ingestion_client.connect()
 
             guard = LocalLoopGuard(
                 max_iterations=limit_per_cycle + 20,
@@ -1031,7 +1076,7 @@ def batch_run_cmd(
                 pipeline = JobPipeline(
                     repository=repo,
                     evaluator=evaluator,
-                    ingestion_client=mcp_client,
+                    ingestion_client=ingestion_client,
                     truncator=truncator,
                     guard=guard,
                     candidate_profile=candidate_profile,
@@ -1048,7 +1093,7 @@ def batch_run_cmd(
                     f"[bold cyan]Shortlisted:[/] {cycle_shortlisted}"
                 )
             finally:
-                await mcp_client.disconnect()
+                await ingestion_client.disconnect()
                 await evaluator.close()
                 await repo.close()
 
@@ -1059,6 +1104,7 @@ def batch_run_cmd(
                     headless=True,
                     dry_run=dry_run,
                     resume_path=resume_path,
+                    max_daily_linkedin=20,
                 )
                 apply_stats = await worker.run(limit=limit_per_cycle)
                 total_applied += apply_stats.get("applied", 0)

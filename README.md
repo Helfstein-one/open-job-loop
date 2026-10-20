@@ -134,14 +134,21 @@ python -m src.presentation.cli run --no-mock --keywords "Staff Data Engineer" --
 python -m src.presentation.cli run --model-fast llama3.2:1b --model-deep qwen2.5-coder:3b
 ```
 
-### 6. Execução em Lote Internacional (US / EU / Global) - 500+ Vagas
-Para cobrir centenas de vagas internacionais sem estourar limites de paginação do LinkedIn, utilize a rotação inteligente de queries:
-```bash
-# Executa 5 rotações de 100 vagas (500 vagas potenciais) nos EUA, Europa e Global com Auto-Apply real:
-python -m src.presentation.cli batch-run --cycles 5 --limit 100 --apply
+### 6. Execução em Lote Internacional (US / UK / EU) - 1.000+ Vagas & Proteção Anti-Bot
+Para descobrir até 1.000 vagas internacionais sem bloqueios de taxa nem invalidação de sessão, o sistema implementa uma **Arquitetura Híbrida**:
+- **Fontes Abertas (Jobicy, Arbeitnow, Remotive)**: Descoberta massiva de vagas remotas sem autenticação nem limites de acesso.
+- **Salvaguarda LinkedIn**: Trava diária de 20 candidaturas Easy Apply por janela móvel de 24h, jitter humano de 15 a 45s e detecção proativa de checkpoints.
+- **Roteamento Direto ATS**: Vagas externas que apontam para Greenhouse ou Lever são preenchidas diretamente sem riscos de conta.
 
-# Simulação Dry-Run para inspeção de formulários internacionais:
-python -m src.presentation.cli batch-run --cycles 5 --limit 100 --apply --dry-run
+```bash
+# Execução híbrida de 1.000 vagas potenciais (10 ciclos x 100 vagas) nos EUA, Reino Unido e União Europeia:
+python -m src.presentation.cli batch-run --cycles 10 --limit 100 --threshold 60 --apply --source hybrid
+
+# Descoberta 100% aberta (zero chamadas ao LinkedIn, máxima escala):
+python -m src.presentation.cli batch-run --cycles 10 --limit 100 --threshold 60 --apply --source open
+
+# Simulação Dry-Run com rotação internacional:
+python -m src.presentation.cli batch-run --cycles 10 --limit 100 --threshold 60 --apply --dry-run
 ```
 
 ### 7. Auditoria Completa de Submissões e Logs no DuckDB

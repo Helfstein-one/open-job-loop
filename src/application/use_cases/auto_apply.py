@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -33,6 +34,8 @@ class AutoApplyWorker:
         resume_path: Optional[str] = "data/resume.pdf",
         interactive_active_learning: bool = False,
         llm_model: str = "qwen2.5-coder:3b",
+        max_daily_linkedin: int = 20,
+        linkedin_jitter_range: tuple[float, float] = (15.0, 45.0),
     ):
         self.db_path = db_path
         self.headless = headless
@@ -42,6 +45,8 @@ class AutoApplyWorker:
         self.resume_path = resume_path
         self.interactive_active_learning = interactive_active_learning
         self.llm_model = llm_model
+        self.max_daily_linkedin = max_daily_linkedin
+        self.linkedin_jitter_range = linkedin_jitter_range
 
     async def run(self, limit: Optional[int] = None) -> Dict[str, Any]:
         logger.info(
@@ -144,6 +149,25 @@ class AutoApplyWorker:
         )
 
         stats = {"processed": len(res), "applied": 0, "failed": 0, "skipped": 0}
+        linkedin_auth_blocked = False
+
+        # Verifica cota diária de segurança para LinkedIn Easy Apply
+        daily_linkedin_apps = 0
+        try:
+            row = conn.execute("""
+                SELECT count(*) FROM application_audit_log 
+                WHERE channel = 'LINKEDIN_EASY_APPLY' 
+                  AND applied_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+                  AND status IN ('APPLIED', 'APPLIED_DRY_RUN');
+            """).fetchone()
+            if row:
+                daily_linkedin_apps = int(row[0])
+        except Exception:
+            pass
+
+        logger.info(
+            f"Candidaturas LinkedIn realizadas nas últimas 24h: {daily_linkedin_apps}/{self.max_daily_linkedin} (limite diário de segurança)"
+        )
 
         # Resolve state file location
         actual_state_file = None
@@ -222,9 +246,41 @@ class AutoApplyWorker:
                         conn.execute("CHECKPOINT;")
                         continue
 
-                    # 2. LinkedIn Page Flow
+                    # 2. LinkedIn Page Flow (com salvaguardas anti-bot)
+                    if "linkedin.com" in (url or "").lower():
+                        if daily_linkedin_apps >= self.max_daily_linkedin:
+                            logger.warning(
+                                f"🛑 Cota diária de segurança do LinkedIn atingida ({daily_linkedin_apps}/{self.max_daily_linkedin}). "
+                                f"Pulando candidatura Easy Apply para '{title}' para proteger a conta contra restrição."
+                            )
+                            stats["skipped"] += 1
+                            continue
+
+                        if linkedin_auth_blocked:
+                            logger.warning(
+                                f"⚠️ Bloqueio temporário/checkpoint de autenticação ativo nesta sessão. "
+                                f"Pulando '{title}' no LinkedIn."
+                            )
+                            stats["skipped"] += 1
+                            continue
+
                     await page.goto(url, timeout=30000)
                     await asyncio.sleep(1.5)
+
+                    # Detecção proativa de Checkpoint / Auth Challenge
+                    current_url = page.url.lower()
+                    if any(barrier in current_url for barrier in ["/uas/login", "/checkpoint/", "/challenge/", "security-check"]):
+                        logger.warning(
+                            f"🚨 LinkedIn Checkpoint / Barreira de Autenticação detectada em {page.url}! "
+                            f"Pausando candidaturas LinkedIn para salvaguardar a integridade da conta."
+                        )
+                        linkedin_auth_blocked = True
+                        conn.execute(
+                            "UPDATE job_postings SET status = 'NEEDS_REVIEW', error_message = ? WHERE id = ?",
+                            ("LinkedIn auth checkpoint / rate-limit barrier detected", job_id),
+                        )
+                        stats["skipped"] += 1
+                        continue
 
                     easy_apply_button = page.locator("button:has-text('Easy Apply'), button:has-text('Candidatura simplificada')").first
                     if await easy_apply_button.count() > 0 and await easy_apply_button.is_visible():
@@ -373,7 +429,12 @@ class AutoApplyWorker:
                         )
                         conn.execute("CHECKPOINT;")
                         stats["applied"] += 1
+                        daily_linkedin_apps += 1
                         logger.info(f"✅ Candidatura finalizada com sucesso ({new_status}) para {title}")
+
+                        jitter_sec = random.uniform(self.linkedin_jitter_range[0], self.linkedin_jitter_range[1])
+                        logger.info(f"⏳ Jitter humano anti-bot: aguardando {jitter_sec:.1f}s antes da próxima ação...")
+                        await asyncio.sleep(jitter_sec)
                     else:
                         # 3. Check for external application redirection
                         ext_apply = page.locator("button.jobs-apply-button, a.jobs-apply-button, a:has-text('Apply')").first
