@@ -28,13 +28,6 @@ from src.application.use_cases.pipeline import (
     PipelineEvent,
     PipelineEventType,
 )
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
-from src.infrastructure.adapters.llm_evaluator import (
-    JobFitEvaluator,
-    LLMConnectionError,
-    LLMTimeoutError,
-)
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
@@ -42,10 +35,18 @@ from src.domain.models import (
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import (
+    JobFitEvaluator,
+    LLMConnectionError,
+    LLMTimeoutError,
+)
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 
 # ==============================================================================
 # Test Fixtures & Helpers
 # ==============================================================================
+
 
 @pytest.fixture
 async def repo_memory() -> AsyncGenerator[JobRepository, None]:
@@ -125,6 +126,7 @@ def create_mock_evaluator(
 # 1. Pipeline Initialization & Configuration Tests
 # ==============================================================================
 
+
 class TestPipelineInitialization:
     def test_default_initialization(self, repo_memory: JobRepository):
         evaluator = create_mock_evaluator()
@@ -140,7 +142,9 @@ class TestPipelineInitialization:
         assert pipeline.score_threshold == 60
         assert pipeline.candidate_profile == DEFAULT_CANDIDATE_PROFILE
 
-    def test_custom_config_and_threshold(self, repo_memory: JobRepository, sample_candidate: CandidateProfile):
+    def test_custom_config_and_threshold(
+        self, repo_memory: JobRepository, sample_candidate: CandidateProfile
+    ):
         evaluator = create_mock_evaluator()
         config = PipelineConfig(score_threshold=80, batch_size=5, max_iterations=20)
         pipeline = JobPipeline(
@@ -176,6 +180,7 @@ class TestPipelineInitialization:
 # ==============================================================================
 # 2. Full 5-Stage Lifecycle Tests
 # ==============================================================================
+
 
 class TestPipelineLifecycle:
     @pytest.mark.asyncio
@@ -289,6 +294,7 @@ class TestPipelineLifecycle:
 # 3. Deduplication Tests
 # ==============================================================================
 
+
 class TestPipelineDeduplication:
     @pytest.mark.asyncio
     async def test_duplicate_job_skips_downstream_stages(
@@ -361,6 +367,7 @@ class TestPipelineDeduplication:
 # 4. Pre-Processing Tests
 # ==============================================================================
 
+
 class TestPipelinePreProcessing:
     @pytest.mark.asyncio
     async def test_truncation_on_long_description(
@@ -371,7 +378,9 @@ class TestPipelinePreProcessing:
         Long description (> 1500 tokens) is truncated, tagged with is_truncated=True,
         and triaged with truncated text.
         """
-        long_text = "Senior Distributed Systems Architect. " + ("Core python and architecture responsibilities. " * 300)
+        long_text = "Senior Distributed Systems Architect. " + (
+            "Core python and architecture responsibilities. " * 300
+        )
         job = create_job_posting(description=long_text)
         client = MockMcpJobClient(jobs=[job])
         await client.connect()
@@ -389,7 +398,9 @@ class TestPipelinePreProcessing:
         persisted = await repo_memory.get_job_by_hash(job.content_hash)
         assert persisted is not None
         assert persisted.is_truncated is True
-        assert "[...Description truncated for context window ceiling...]" in (persisted.description or "")
+        assert "[...Description truncated for context window ceiling...]" in (
+            persisted.description or ""
+        )
 
     @pytest.mark.asyncio
     async def test_short_description_fails_preprocessing(
@@ -431,6 +442,7 @@ class TestPipelinePreProcessing:
 # 5. Triage Resilience & LocalLoopGuard Integration Tests
 # ==============================================================================
 
+
 class TestPipelineTriageResilience:
     @pytest.mark.asyncio
     async def test_llm_timeout_handled_gracefully_skipped(
@@ -446,7 +458,9 @@ class TestPipelineTriageResilience:
         client = MockMcpJobClient(jobs=[job])
         await client.connect()
 
-        evaluator = create_mock_evaluator(side_effect=LLMTimeoutError("Ollama inference timed out after 15s"))
+        evaluator = create_mock_evaluator(
+            side_effect=LLMTimeoutError("Ollama inference timed out after 15s")
+        )
         events: list[PipelineEvent] = []
 
         pipeline = JobPipeline(
@@ -468,7 +482,9 @@ class TestPipelineTriageResilience:
         assert persisted.status == JobStatus.SKIPPED_TIMEOUT
         assert "timed out" in (persisted.error_message or "").lower()
 
-        timeout_events = [e for e in events if e.event_type == PipelineEventType.JOB_SKIPPED_TIMEOUT]
+        timeout_events = [
+            e for e in events if e.event_type == PipelineEventType.JOB_SKIPPED_TIMEOUT
+        ]
         assert len(timeout_events) == 1
 
     @pytest.mark.asyncio
@@ -484,7 +500,9 @@ class TestPipelineTriageResilience:
         client = MockMcpJobClient(jobs=[job])
         await client.connect()
 
-        evaluator = create_mock_evaluator(side_effect=LLMConnectionError("Failed to connect to Ollama at http://localhost:11434"))
+        evaluator = create_mock_evaluator(
+            side_effect=LLMConnectionError("Failed to connect to Ollama at http://localhost:11434")
+        )
 
         pipeline = JobPipeline(
             repository=repo_memory,
@@ -524,7 +542,11 @@ class TestPipelineTriageResilience:
             if target_job:
                 target_job.status = JobStatus.SKIPPED_TIMEOUT
                 target_job.error_message = "Guard timeout"
-                await repo_memory.update_status(target_job.id, status=JobStatus.SKIPPED_TIMEOUT, error_message=target_job.error_message)
+                await repo_memory.update_status(
+                    target_job.id,
+                    status=JobStatus.SKIPPED_TIMEOUT,
+                    error_message=target_job.error_message,
+                )
 
         mock_guard.run_guarded = AsyncMock(side_effect=_guard_timeout_side_effect)
 
@@ -545,6 +567,7 @@ class TestPipelineTriageResilience:
 # ==============================================================================
 # 6. Iteration Bounding Tests
 # ==============================================================================
+
 
 class TestPipelineIterationBounding:
     @pytest.mark.asyncio
@@ -605,6 +628,7 @@ class TestPipelineIterationBounding:
 # 7. Telemetry & Event Hooks Tests
 # ==============================================================================
 
+
 class TestPipelineTelemetry:
     @pytest.mark.asyncio
     async def test_sync_and_async_listeners_invoked(
@@ -652,6 +676,7 @@ class TestPipelineTelemetry:
             raise RuntimeError("UI listener crashed")
 
         working_events: list[PipelineEvent] = []
+
         def working_listener(event: PipelineEvent) -> None:
             working_events.append(event)
 
@@ -671,6 +696,7 @@ class TestPipelineTelemetry:
 # 8. O(1) RAM Streaming Tests
 # ==============================================================================
 
+
 class TestPipelineStreamingRAM:
     @pytest.mark.asyncio
     async def test_process_stream_streaming_generator(
@@ -681,6 +707,7 @@ class TestPipelineStreamingRAM:
         Process a sequence of jobs through process_stream async iterator.
         Verifies O(1) memory behavior and state persistence.
         """
+
         async def job_generator(count: int) -> AsyncGenerator[JobPosting, None]:
             for i in range(count):
                 yield create_job_posting(title=f"Streaming Engineer {i}", company=f"Company {i}")

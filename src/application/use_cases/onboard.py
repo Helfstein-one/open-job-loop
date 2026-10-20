@@ -1,26 +1,33 @@
-import os
-import re
 import json
 import logging
+import os
+import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
+
+import pypdf
 import yaml
 from openai import AsyncOpenAI
 from playwright.async_api import async_playwright
-import pypdf
-
-from src.application.use_cases.profile import ProfileManager
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
 class TargetJobProfile(BaseModel):
-    target_roles: List[str] = Field(default_factory=list, description="Recommended target job titles")
+    target_roles: List[str] = Field(
+        default_factory=list, description="Recommended target job titles"
+    )
     seniority_level: str = Field(default="Senior", description="Inferred seniority level")
-    suggested_keywords: str = Field(default="Python Engineer", description="Recommended search keywords for LinkedIn")
-    estimated_salary_range: str = Field(default="$120k - $160k", description="Estimated target salary range")
-    key_strengths: List[str] = Field(default_factory=list, description="Top candidate technical strengths")
+    suggested_keywords: str = Field(
+        default="Python Engineer", description="Recommended search keywords for LinkedIn"
+    )
+    estimated_salary_range: str = Field(
+        default="$120k - $160k", description="Estimated target salary range"
+    )
+    key_strengths: List[str] = Field(
+        default_factory=list, description="Top candidate technical strengths"
+    )
     suggested_questions: List[Dict[str, str]] = Field(
         default_factory=list, description="Adaptive grill-me questions to calibrate preferences"
     )
@@ -80,7 +87,9 @@ class ProfilerAgent:
                 browser = await p.chromium.launch(headless=headless)
                 context = await browser.new_context(storage_state=actual_state_file)
             else:
-                logger.warning("Nenhuma sessão salva encontrada para extração de URL. Tentando acesso anônimo.")
+                logger.warning(
+                    "Nenhuma sessão salva encontrada para extração de URL. Tentando acesso anônimo."
+                )
                 browser = await p.chromium.launch(headless=headless)
                 context = await browser.new_context()
 
@@ -90,7 +99,11 @@ class ProfilerAgent:
             await page.wait_for_timeout(3000)
 
             # Extração de seções principais
-            body_text = await page.inner_text("main") if await page.locator("main").count() > 0 else await page.inner_text("body")
+            body_text = (
+                await page.inner_text("main")
+                if await page.locator("main").count() > 0
+                else await page.inner_text("body")
+            )
 
             # Acessar overlay de informações de contato para extrair e-mail, telefone e portfolio
             contact_text = ""
@@ -122,11 +135,19 @@ class ProfilerAgent:
                     "summary": "Staff Data Engineer with 10+ years of experience in distributed data pipelines, Python, Spark, and DuckDB.",
                 },
                 "target_profile": {
-                    "target_roles": ["Staff Data Engineer", "Lead Data Platform Engineer", "Principal Data Architect"],
+                    "target_roles": [
+                        "Staff Data Engineer",
+                        "Lead Data Platform Engineer",
+                        "Principal Data Architect",
+                    ],
                     "seniority_level": "Staff / Lead",
                     "suggested_keywords": "Staff Data Engineer Python Spark",
                     "estimated_salary_range": "$130k - $160k USD / year",
-                    "key_strengths": ["Python & Async architectures", "DuckDB & Apache Spark", "Distributed streaming systems"],
+                    "key_strengths": [
+                        "Python & Async architectures",
+                        "DuckDB & Apache Spark",
+                        "Distributed streaming systems",
+                    ],
                     "suggested_questions": [
                         {
                             "id": "target_roles",
@@ -223,19 +244,19 @@ Output ONLY valid JSON. Zero conversational text.
                 parsed["candidate"] = {}
 
             # Extração determinística de dados de contato do texto bruto
-            email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', raw_text)
+            email_match = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", raw_text)
             if email_match:
                 parsed["candidate"]["email"] = email_match.group(0)
 
-            phone_match = re.search(r'(\+?55\s?\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4})', raw_text)
+            phone_match = re.search(r"(\+?55\s?\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4})", raw_text)
             if phone_match:
                 parsed["candidate"]["phone"] = phone_match.group(0).strip()
 
-            linkedin_match = re.search(r'linkedin\.com/in/[\w\-]+', raw_text)
+            linkedin_match = re.search(r"linkedin\.com/in/[\w\-]+", raw_text)
             if linkedin_match:
                 parsed["candidate"]["linkedin_url"] = f"https://www.{linkedin_match.group(0)}"
 
-            github_match = re.search(r'github\.com/[\w\-]+', raw_text)
+            github_match = re.search(r"github\.com/[\w\-]+", raw_text)
             if github_match:
                 parsed["candidate"]["github_url"] = f"https://{github_match.group(0)}"
 
@@ -257,8 +278,16 @@ Output ONLY valid JSON. Zero conversational text.
                     "estimated_salary_range": "$120k - $150k",
                     "key_strengths": ["Software Engineering"],
                     "suggested_questions": [
-                        {"id": "roles", "question": "Quais cargos você deseja buscar?", "default": "Senior Software Engineer"},
-                        {"id": "salary", "question": "Qual sua pretensão salarial?", "default": "$130,000 USD / ano"},
+                        {
+                            "id": "roles",
+                            "question": "Quais cargos você deseja buscar?",
+                            "default": "Senior Software Engineer",
+                        },
+                        {
+                            "id": "salary",
+                            "question": "Qual sua pretensão salarial?",
+                            "default": "$130,000 USD / ano",
+                        },
                     ],
                 },
             }
@@ -287,12 +316,16 @@ Output ONLY valid JSON. Zero conversational text.
             "target_job_profile": {
                 "roles": target.get("target_roles", []),
                 "seniority": target.get("seniority_level", "Staff"),
-                "search_keywords": answers.get("search_keywords", target.get("suggested_keywords", "")),
+                "search_keywords": answers.get(
+                    "search_keywords", target.get("suggested_keywords", "")
+                ),
                 "salary_target": answers.get("salary", target.get("estimated_salary_range", "")),
                 "work_preference": answers.get("work_model", "100% Remoto"),
             },
             "work_authorization": {
-                "details": answers.get("visa", "Brasileiro; necessita de sponsorship para EUA/Europa"),
+                "details": answers.get(
+                    "visa", "Brasileiro; necessita de sponsorship para EUA/Europa"
+                ),
                 "authorized_in_brazil": True,
                 "requires_sponsorship_us": "sponsorship" in answers.get("visa", "").lower(),
             },

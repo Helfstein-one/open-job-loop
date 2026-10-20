@@ -19,10 +19,10 @@ import pytest
 from src.application.use_cases.harness import LocalLoopGuard
 from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
 from src.application.use_cases.truncator import TextTruncator
-from src.infrastructure.adapters.repository import JobRepository
+from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
-from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
+from src.infrastructure.adapters.repository import JobRepository
 from tests.test_local_inference import is_ollama_model_available
 
 FIXTURE_PATH = Path("fixtures/golden_jobs.json")
@@ -64,7 +64,9 @@ class TestTier3PipelineIntegrationOffline:
     """Offline 5-stage pipeline execution with deterministic evaluator mock."""
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_cross_feature_offline(self, tmp_path: Path, target_candidate: CandidateProfile):
+    async def test_full_pipeline_cross_feature_offline(
+        self, tmp_path: Path, target_candidate: CandidateProfile
+    ):
         db_path = str(tmp_path / "tier3_offline.duckdb")
         repo = JobRepository(db_path=db_path)
         await repo.initialize()
@@ -75,7 +77,12 @@ class TestTier3PipelineIntegrationOffline:
         async def _mock_triage(model, response_model, messages, **kwargs):
             # Extract user message containing job description
             user_msg = next((m["content"] for m in messages if m["role"] == "user"), "")
-            if "Nurse" in user_msg or "ICU" in user_msg or "TikTok" in user_msg or "Java" in user_msg:
+            if (
+                "Nurse" in user_msg
+                or "ICU" in user_msg
+                or "TikTok" in user_msg
+                or "Java" in user_msg
+            ):
                 return MatchEvaluation(
                     fit_score=10,
                     recommendation=Recommendation.DISCARD,

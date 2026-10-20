@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Open APIs Job Ingestion Adapter for open-job-loop.
 
@@ -11,6 +12,7 @@ import html
 import logging
 import re
 from typing import Any, List, Optional
+
 import httpx
 
 from src.application.ports.job_ingestion import JobIngestionPort
@@ -87,7 +89,12 @@ class OpenApisJobClient(JobIngestionPort):
         kw = kwargs.get("keywords") or self.keywords
         loc = kwargs.get("location") or self.location
 
-        logger.info("Fetching open jobs from public APIs (keywords='%s', location='%s', target=%d)", kw, loc, limit)
+        logger.info(
+            "Fetching open jobs from public APIs (keywords='%s', location='%s', target=%d)",
+            kw,
+            loc,
+            limit,
+        )
 
         # Run concurrent fetch from all 3 public providers
         results = await asyncio.gather(
@@ -133,7 +140,9 @@ class OpenApisJobClient(JobIngestionPort):
                 raw_jobs = data.get("jobs", [])
                 for item in raw_jobs:
                     title = item.get("jobTitle", "").strip()
-                    desc = clean_html_text(item.get("jobDescription") or item.get("jobExcerpt") or "")
+                    desc = clean_html_text(
+                        item.get("jobDescription") or item.get("jobExcerpt") or ""
+                    )
                     company = item.get("companyName", "").strip() or "Unknown Company"
                     job_url = item.get("url", "")
                     job_geo = item.get("jobGeo", geo).upper()
@@ -313,11 +322,18 @@ class HybridJobClient(JobIngestionPort):
                 logger.info("HybridClient: LinkedIn returned %d jobs", len(li_jobs))
             except Exception as e:
                 err_msg = str(e).lower()
-                if any(x in err_msg for x in ["auth", "login", "barrier", "blocker", "stale", "checkpoint"]):
-                    logger.warning("🚨 LinkedIn anti-bot / auth checkpoint triggered (%s). Isolando LinkedIn e continuando com Open APIs.", e)
+                if any(
+                    x in err_msg
+                    for x in ["auth", "login", "barrier", "blocker", "stale", "checkpoint"]
+                ):
+                    logger.warning(
+                        "🚨 LinkedIn anti-bot / auth checkpoint triggered (%s). Isolando LinkedIn e continuando com Open APIs.",
+                        e,
+                    )
                     self._linkedin_blocked = True
                 else:
-                    logger.warning("HybridClient: LinkedIn query failed (%s). Continuando com Open APIs.", e)
+                    logger.warning(
+                        "HybridClient: LinkedIn query failed (%s). Continuando com Open APIs.", e
+                    )
 
         return all_jobs[:limit]
-

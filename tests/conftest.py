@@ -1,5 +1,7 @@
 import pytest
+
 from src.domain.models import JobPosting
+
 
 @pytest.fixture
 def sample_job_posting():

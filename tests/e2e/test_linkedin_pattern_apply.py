@@ -1,14 +1,12 @@
-import pytest
-import asyncio
 import http.server
 import socketserver
 import threading
-from pathlib import Path
-import duckdb
-from playwright.async_api import async_playwright
 
-from src.application.use_cases.profile import ProfileManager
+import duckdb
+import pytest
+
 from src.application.use_cases.auto_apply import AutoApplyWorker
+from src.application.use_cases.profile import ProfileManager
 
 MOCK_HTML_PAGE = """<!DOCTYPE html>
 <html>
@@ -102,13 +100,19 @@ async def test_e2e_linkedin_pattern_identification_and_auto_apply(tmp_path, mock
     assert count >= 10
 
     # 2. Verify pattern identification for form questions
-    py_ans = await profile_manager.synthesize_answer("How many years of experience do you have with Python?")
+    py_ans = await profile_manager.synthesize_answer(
+        "How many years of experience do you have with Python?"
+    )
     assert "10" in py_ans
 
-    salary_ans = await profile_manager.synthesize_answer("What is your desired salary or compensation expectations?")
+    salary_ans = await profile_manager.synthesize_answer(
+        "What is your desired salary or compensation expectations?"
+    )
     assert "140,000" in salary_ans or "38.000" in salary_ans
 
-    sponsorship_ans = await profile_manager.synthesize_answer("Will you now or in the future require visa sponsorship?")
+    sponsorship_ans = await profile_manager.synthesize_answer(
+        "Will you now or in the future require visa sponsorship?"
+    )
     assert "Yes" in sponsorship_ans
 
     # 3. Insert SHORTLISTED job pointing to local mock server
@@ -164,7 +168,9 @@ async def test_e2e_linkedin_pattern_identification_and_auto_apply(tmp_path, mock
 
     # Check updated database record
     conn = duckdb.connect(db_file)
-    updated_job = conn.execute("SELECT status FROM job_postings WHERE id = 'job-e2e-123'").fetchone()
+    updated_job = conn.execute(
+        "SELECT status FROM job_postings WHERE id = 'job-e2e-123'"
+    ).fetchone()
     conn.close()
 
     assert updated_job is not None

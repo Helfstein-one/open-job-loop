@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 ATS Adapter Router and Channel Detection.
 """
@@ -7,11 +8,10 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.ashby import AshbyAdapter
 from src.infrastructure.adapters.ats.base import BaseATSAdapter
 from src.infrastructure.adapters.ats.greenhouse import GreenhouseAdapter
 from src.infrastructure.adapters.ats.lever import LeverAdapter
-from src.infrastructure.adapters.ats.ashby import AshbyAdapter
-
 
 _ADAPTERS: List[BaseATSAdapter] = [
     GreenhouseAdapter(),

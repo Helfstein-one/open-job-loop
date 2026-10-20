@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Execution harness subsystem for open-job-loop.
 
@@ -20,10 +21,11 @@ from collections.abc import Awaitable, Callable
 from enum import Enum
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, TypeVar
+
 from typing_extensions import Self
 
-from src.infrastructure.adapters.llm_evaluator import LLMTimeoutError
 from src.domain.models import JobPosting, JobStatus
+from src.infrastructure.adapters.llm_evaluator import LLMTimeoutError
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.repository import JobRepository
@@ -36,6 +38,7 @@ T = TypeVar("T")
 # ==============================================================================
 # Exceptions
 # ==============================================================================
+
 
 class HarnessError(Exception):
     """Base exception for execution harness errors."""
@@ -53,12 +56,14 @@ class MaxIterationsReachedError(HarnessError):
 # MCP Circuit Breaker
 # ==============================================================================
 
+
 class CircuitState(str, Enum):
     """
     States for the MCP circuit breaker state machine.
     """
-    CLOSED = "CLOSED"        # Normal operation: requests allowed
-    OPEN = "OPEN"            # Tripped: requests blocked
+
+    CLOSED = "CLOSED"  # Normal operation: requests allowed
+    OPEN = "OPEN"  # Tripped: requests blocked
     HALF_OPEN = "HALF_OPEN"  # Probe state: trial request allowed to verify recovery
 
 
@@ -174,9 +179,7 @@ class MCPCircuitBreaker:
         prev_state = self.state
 
         if prev_state == CircuitState.HALF_OPEN:
-            logger.warning(
-                "MCPCircuitBreaker probe failed during HALF_OPEN. Re-tripping to OPEN."
-            )
+            logger.warning("MCPCircuitBreaker probe failed during HALF_OPEN. Re-tripping to OPEN.")
             self._state = CircuitState.OPEN
             self._total_trips += 1
             return
@@ -220,9 +223,7 @@ class MCPCircuitBreaker:
             Exception: Any exception raised by func (recorded as a failure).
         """
         if not self.allow_request():
-            raise CircuitOpenError(
-                f"MCPCircuitBreaker is {self.state.value}. Request blocked."
-            )
+            raise CircuitOpenError(f"MCPCircuitBreaker is {self.state.value}. Request blocked.")
 
         try:
             if inspect.iscoroutine(func):
@@ -244,9 +245,7 @@ class MCPCircuitBreaker:
     async def __aenter__(self) -> Self:
         """Async context manager entry: check circuit permissions."""
         if not self.allow_request():
-            raise CircuitOpenError(
-                f"MCPCircuitBreaker is {self.state.value}. Request blocked."
-            )
+            raise CircuitOpenError(f"MCPCircuitBreaker is {self.state.value}. Request blocked.")
         return self
 
     async def __aexit__(
@@ -266,6 +265,7 @@ class MCPCircuitBreaker:
 # ==============================================================================
 # Local Loop Guard
 # ==============================================================================
+
 
 class LocalLoopGuard:
     """
@@ -416,9 +416,7 @@ class LocalLoopGuard:
             )
             if target_job is not None:
                 target_job.status = JobStatus.ERROR
-                target_job.error_message = (
-                    f"Circuit breaker is {self.circuit_breaker.state.value}"
-                )
+                target_job.error_message = f"Circuit breaker is {self.circuit_breaker.state.value}"
                 if target_repo is not None:
                     try:
                         await target_repo.update_status(

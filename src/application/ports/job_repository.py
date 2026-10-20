@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, Optional
+
 from src.domain.models import JobPosting, JobStatus
 
 

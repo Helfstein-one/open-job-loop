@@ -13,7 +13,12 @@ from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import ValidationError
 
-from src.infrastructure.adapters.llm_client import get_instructor_client, resolve_api_key, resolve_base_url
+from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
+from src.infrastructure.adapters.llm_client import (
+    get_instructor_client,
+    resolve_api_key,
+    resolve_base_url,
+)
 from src.infrastructure.adapters.llm_evaluator import (
     JobFitEvaluator,
     LLMConnectionError,
@@ -29,7 +34,6 @@ from src.infrastructure.adapters.llm_prompts import (
     strip_job_posting_tags,
     wrap_job_posting,
 )
-from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 
 
 def is_ollama_available(base_url: str = "http://localhost:11434") -> bool:
@@ -41,7 +45,10 @@ def is_ollama_available(base_url: str = "http://localhost:11434") -> bool:
                 return False
             data = json.loads(resp.read().decode("utf-8"))
             model_names = [m.get("name", "") for m in data.get("models", [])]
-            return any(name.startswith("llama3.2:3b") or name.startswith("llama3.2:latest") for name in model_names)
+            return any(
+                name.startswith("llama3.2:3b") or name.startswith("llama3.2:latest")
+                for name in model_names
+            )
     except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
         return False
 
@@ -70,6 +77,7 @@ def mock_instructor_client():
 # ==============================================================================
 # Client Factory Tests
 # ==============================================================================
+
 
 def test_resolve_base_url_default(monkeypatch):
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
@@ -103,6 +111,7 @@ def test_get_instructor_client_initialization():
 # ==============================================================================
 # Prompts & Delimiters Tests
 # ==============================================================================
+
 
 def test_wrap_job_posting_basic():
     text = "We are seeking a Python Developer with FastAPI expertise."
@@ -208,6 +217,7 @@ def test_build_evaluation_messages(sample_candidate):
 # JobFitEvaluator Unit Tests (Mock Isolated)
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_evaluator_successful_match(mock_instructor_client, sample_candidate):
     expected_evaluation = MatchEvaluation(
@@ -246,7 +256,9 @@ async def test_evaluator_empty_inputs_validation(mock_instructor_client, sample_
 
 @pytest.mark.asyncio
 async def test_evaluator_timeout_exception(mock_instructor_client, sample_candidate):
-    mock_instructor_client.chat.completions.create.side_effect = APITimeoutError(request=MagicMock())
+    mock_instructor_client.chat.completions.create.side_effect = APITimeoutError(
+        request=MagicMock()
+    )
 
     evaluator = JobFitEvaluator(client=mock_instructor_client, timeout=0.1)
 
@@ -260,7 +272,9 @@ async def test_evaluator_timeout_exception(mock_instructor_client, sample_candid
 
 @pytest.mark.asyncio
 async def test_evaluator_connection_error(mock_instructor_client, sample_candidate):
-    mock_instructor_client.chat.completions.create.side_effect = APIConnectionError(request=MagicMock())
+    mock_instructor_client.chat.completions.create.side_effect = APIConnectionError(
+        request=MagicMock()
+    )
 
     evaluator = JobFitEvaluator(client=mock_instructor_client)
 
@@ -284,8 +298,8 @@ async def test_evaluator_model_not_found(mock_instructor_client, sample_candidat
 
 @pytest.mark.asyncio
 async def test_evaluator_validation_error_from_pydantic(mock_instructor_client, sample_candidate):
-    mock_instructor_client.chat.completions.create.side_effect = ValidationError.from_exception_data(
-        title="MatchEvaluation", line_errors=[]
+    mock_instructor_client.chat.completions.create.side_effect = (
+        ValidationError.from_exception_data(title="MatchEvaluation", line_errors=[])
     )
 
     evaluator = JobFitEvaluator(client=mock_instructor_client)
@@ -295,7 +309,9 @@ async def test_evaluator_validation_error_from_pydantic(mock_instructor_client, 
 
 
 @pytest.mark.asyncio
-async def test_evaluator_validation_error_from_instructor_retry(mock_instructor_client, sample_candidate):
+async def test_evaluator_validation_error_from_instructor_retry(
+    mock_instructor_client, sample_candidate
+):
     mock_instructor_client.chat.completions.create.side_effect = InstructorRetryException(
         "Invalid output schema", n_attempts=1, total_usage=None
     )
@@ -307,7 +323,9 @@ async def test_evaluator_validation_error_from_instructor_retry(mock_instructor_
 
 
 @pytest.mark.asyncio
-async def test_evaluator_threshold_consistency_enforcement(mock_instructor_client, sample_candidate):
+async def test_evaluator_threshold_consistency_enforcement(
+    mock_instructor_client, sample_candidate
+):
     # LLM returned high score (85) but accidentally labeled DISCARD
     inconsistent_evaluation = MatchEvaluation(
         fit_score=85,
@@ -318,7 +336,9 @@ async def test_evaluator_threshold_consistency_enforcement(mock_instructor_clien
     )
     mock_instructor_client.chat.completions.create.return_value = inconsistent_evaluation
 
-    evaluator = JobFitEvaluator(client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True)
+    evaluator = JobFitEvaluator(
+        client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True
+    )
     result = await evaluator.evaluate_fit("Python role", sample_candidate)
 
     # Consistency enforcement corrects recommendation to SHORTLIST
@@ -326,7 +346,9 @@ async def test_evaluator_threshold_consistency_enforcement(mock_instructor_clien
 
 
 @pytest.mark.asyncio
-async def test_evaluator_threshold_consistency_enforcement_discard(mock_instructor_client, sample_candidate):
+async def test_evaluator_threshold_consistency_enforcement_discard(
+    mock_instructor_client, sample_candidate
+):
     # LLM returned low score (40) but labeled SHORTLIST
     inconsistent_evaluation = MatchEvaluation(
         fit_score=40,
@@ -337,7 +359,9 @@ async def test_evaluator_threshold_consistency_enforcement_discard(mock_instruct
     )
     mock_instructor_client.chat.completions.create.return_value = inconsistent_evaluation
 
-    evaluator = JobFitEvaluator(client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True)
+    evaluator = JobFitEvaluator(
+        client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True
+    )
     result = await evaluator.evaluate_fit("Python role", sample_candidate)
 
     # Consistency enforcement corrects recommendation to DISCARD
@@ -355,7 +379,9 @@ async def test_evaluator_contradiction_detection(mock_instructor_client, sample_
     )
     mock_instructor_client.chat.completions.create.return_value = contradictory_evaluation
 
-    evaluator = JobFitEvaluator(client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True)
+    evaluator = JobFitEvaluator(
+        client=mock_instructor_client, score_threshold=70, enforce_threshold_consistency=True
+    )
     result = await evaluator.evaluate_fit("Python role", sample_candidate)
 
     assert result.fit_score == 0
@@ -373,6 +399,7 @@ async def test_evaluator_health_check():
 # ==============================================================================
 # Live Ollama Integration Hook
 # ==============================================================================
+
 
 @pytest.mark.skipif(not is_ollama_available(), reason="Local Ollama server is not running")
 @pytest.mark.asyncio

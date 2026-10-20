@@ -1,13 +1,14 @@
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from playwright.async_api import async_playwright
 
+from src.application.use_cases.active_learning import ActiveLearningService
 from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.ashby import AshbyAdapter
 from src.infrastructure.adapters.ats.greenhouse import GreenhouseAdapter
 from src.infrastructure.adapters.ats.lever import LeverAdapter
-from src.infrastructure.adapters.ats.ashby import AshbyAdapter
-from src.application.use_cases.active_learning import ActiveLearningService
 
 
 @pytest.fixture
@@ -32,7 +33,9 @@ def dummy_resume_file(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_greenhouse_form_fill_dry_run(mock_active_learning, dummy_resume_file, tmp_path: Path):
+async def test_greenhouse_form_fill_dry_run(
+    mock_active_learning, dummy_resume_file, tmp_path: Path
+):
     html = """
     <!DOCTYPE html>
     <html>

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Core domain models and Pydantic schemas for open-job-loop.
 """
@@ -7,14 +8,16 @@ Core domain models and Pydantic schemas for open-job-loop.
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List, Any
-from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
+from typing import Any, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class JobStatus(str, Enum):
     """
     Lifecycle status of a job posting throughout pipeline execution.
     """
+
     INGESTED = "INGESTED"
     DUPLICATE = "DUPLICATE"
     PREPROCESSED = "PREPROCESSED"
@@ -34,6 +37,7 @@ class ApplicationChannel(str, Enum):
     """
     Channel or ATS platform used for the application.
     """
+
     LINKEDIN_EASY_APPLY = "LINKEDIN_EASY_APPLY"
     GREENHOUSE = "GREENHOUSE"
     LEVER = "LEVER"
@@ -45,6 +49,7 @@ class Recommendation(str, Enum):
     """
     Triage recommendation decision.
     """
+
     SHORTLIST = "SHORTLIST"
     DISCARD = "DISCARD"
 
@@ -53,6 +58,7 @@ class MatchEvaluation(BaseModel):
     """
     Structured fit evaluation returned by the local LLM via Instructor.
     """
+
     model_config = ConfigDict(
         use_enum_values=False,
         populate_by_name=True,
@@ -63,27 +69,24 @@ class MatchEvaluation(BaseModel):
         ...,
         ge=0,
         le=100,
-        description="Fit score from 0 to 100 based on technical qualifications versus role requirements."
+        description="Fit score from 0 to 100 based on technical qualifications versus role requirements.",
     )
     recommendation: Recommendation = Field(
         ...,
-        description="Binary decision: SHORTLIST if candidate matches role threshold, else DISCARD."
+        description="Binary decision: SHORTLIST if candidate matches role threshold, else DISCARD.",
     )
     matched_skills: Optional[List[str]] = Field(
-        default_factory=list,
-        description="List of required skills possessed by the candidate."
+        default_factory=list, description="List of required skills possessed by the candidate."
     )
     missing_skills: Optional[List[str]] = Field(
-        default_factory=list,
-        description="List of required skills absent from candidate profile."
+        default_factory=list, description="List of required skills absent from candidate profile."
     )
     reasoning: str = Field(
-        default="",
-        description="Concise rationale explaining the evaluation score."
+        default="", description="Concise rationale explaining the evaluation score."
     )
     seniority_fit: Optional[str] = Field(
         default=None,
-        description="Assessment of seniority level match (e.g., 'Junior', 'Mid-level', 'Senior', 'Staff')."
+        description="Assessment of seniority level match (e.g., 'Junior', 'Mid-level', 'Senior', 'Staff').",
     )
 
     @field_validator("matched_skills", "missing_skills", mode="before")
@@ -101,6 +104,7 @@ class JobPosting(BaseModel):
     """
     Core entity model representing a job posting across ingestion, processing, and persistence.
     """
+
     model_config = ConfigDict(
         use_enum_values=False,
         populate_by_name=True,
@@ -109,74 +113,61 @@ class JobPosting(BaseModel):
 
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
-        description="Unique identifier for the job posting record."
+        description="Unique identifier for the job posting record.",
     )
     content_hash: str = Field(
-        ...,
-        description="Canonical SHA256 hex digest of normalized content used for deduplication."
+        ..., description="Canonical SHA256 hex digest of normalized content used for deduplication."
     )
     title: str = Field(..., description="Job posting title.")
     company: str = Field(..., description="Company or organization hiring.")
     location: Optional[str] = Field(default=None, description="Location or remote designation.")
     raw_description: str = Field(..., description="Original raw description text as ingested.")
     cleaned_description: Optional[str] = Field(
-        default=None,
-        description="Cleaned, sanitized, and truncated description text."
+        default=None, description="Cleaned, sanitized, and truncated description text."
     )
     description: Optional[str] = Field(
         default=None,
-        description="Unified description text (synchronized with cleaned_description)."
+        description="Unified description text (synchronized with cleaned_description).",
     )
     url: Optional[str] = Field(default=None, description="Direct URL to posting if available.")
     status: JobStatus = Field(
-        default=JobStatus.INGESTED,
-        description="Current lifecycle status of the job posting."
+        default=JobStatus.INGESTED, description="Current lifecycle status of the job posting."
     )
     fit_score: Optional[int] = Field(
-        default=None,
-        ge=0,
-        le=100,
-        description="Evaluated match score (0-100) if triaged."
+        default=None, ge=0, le=100, description="Evaluated match score (0-100) if triaged."
     )
     recommendation: Optional[Recommendation] = Field(
-        default=None,
-        description="Triage recommendation (SHORTLIST or DISCARD)."
+        default=None, description="Triage recommendation (SHORTLIST or DISCARD)."
     )
     evaluation: Optional[MatchEvaluation] = Field(
-        default=None,
-        description="Full structured evaluation payload if triaged."
+        default=None, description="Full structured evaluation payload if triaged."
     )
     is_truncated: bool = Field(
         default=False,
-        description="Flag indicating whether description was truncated to token threshold."
+        description="Flag indicating whether description was truncated to token threshold.",
     )
     token_count: Optional[int] = Field(
-        default=None,
-        description="Estimated token count of processed description."
+        default=None, description="Estimated token count of processed description."
     )
-    source: str = Field(
-        default="mcp",
-        description="Origin provider or MCP server name."
-    )
+    source: str = Field(default="mcp", description="Origin provider or MCP server name.")
     channel: Optional[ApplicationChannel] = Field(
         default=None,
-        description="Application channel / ATS platform (e.g., LINKEDIN_EASY_APPLY, GREENHOUSE, LEVER, ASHBY)."
+        description="Application channel / ATS platform (e.g., LINKEDIN_EASY_APPLY, GREENHOUSE, LEVER, ASHBY).",
     )
     application_log: Optional[str] = Field(
         default=None,
-        description="Detailed execution log or questions answered during the application process."
+        description="Detailed execution log or questions answered during the application process.",
     )
     error_message: Optional[str] = Field(
-        default=None,
-        description="Error details if job encountered error or failure."
+        default=None, description="Error details if job encountered error or failure."
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="Timestamp when record was created in UTC."
+        description="Timestamp when record was created in UTC.",
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="Timestamp when record was last updated in UTC."
+        description="Timestamp when record was last updated in UTC.",
     )
 
     @model_validator(mode="after")
@@ -198,6 +189,7 @@ class CandidateProfile(BaseModel):
     """
     Profile representing candidate skills, preferences, and background used for LLM evaluation.
     """
+
     model_config = ConfigDict(
         populate_by_name=True,
         extra="ignore",
@@ -206,21 +198,18 @@ class CandidateProfile(BaseModel):
     name: str = Field(..., description="Candidate full name.")
     target_role: str = Field(..., description="Target job title or specialization.")
     years_experience: int = Field(
-        ...,
-        ge=0,
-        description="Total years of professional software engineering experience."
+        ..., ge=0, description="Total years of professional software engineering experience."
     )
     primary_skills: List[str] = Field(
         default_factory=list,
-        description="Core technical competencies (languages, primary frameworks)."
+        description="Core technical competencies (languages, primary frameworks).",
     )
     secondary_skills: List[str] = Field(
         default_factory=list,
-        description="Familiar tools, cloud platforms, and secondary libraries."
+        description="Familiar tools, cloud platforms, and secondary libraries.",
     )
     summary: str = Field(
-        ...,
-        description="Brief background summary, profile excerpt, or resume highlights."
+        ..., description="Brief background summary, profile excerpt, or resume highlights."
     )
 
     def to_prompt_context(self) -> str:

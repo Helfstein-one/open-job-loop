@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Domain Job Repository for open-job-loop.
 
@@ -7,20 +8,24 @@ DAG state transitions, and bounded O(1) RAM streaming queries.
 """
 
 
-from datetime import datetime, timezone
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
-from src.infrastructure.adapters.database import DatabaseManager
-from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation, ApplicationChannel
 from src.application.ports.job_repository import JobRepositoryPort
+from src.domain.models import (
+    ApplicationChannel,
+    JobPosting,
+    JobStatus,
+    MatchEvaluation,
+    Recommendation,
+)
+from src.infrastructure.adapters.database import DatabaseManager
 
 
 def compute_job_hash(
-    raw_description: str,
-    title: Optional[str] = None,
-    company: Optional[str] = None
+    raw_description: str, title: Optional[str] = None, company: Optional[str] = None
 ) -> str:
     """
     Compute a canonical SHA256 hex digest for job posting content deduplication.
@@ -55,7 +60,7 @@ class JobRepository(JobRepositoryPort):
     def __init__(
         self,
         db_path: str = "data/open_job_loop.duckdb",
-        db_manager: Optional[DatabaseManager] = None
+        db_manager: Optional[DatabaseManager] = None,
     ) -> None:
         """
         Initialize the repository.
@@ -131,13 +136,21 @@ class JobRepository(JobRepositoryPort):
         updated_at = job.updated_at or now_utc
 
         # Handle Recommendation enum or string
-        rec_val = job.recommendation.value if isinstance(job.recommendation, Recommendation) else job.recommendation
+        rec_val = (
+            job.recommendation.value
+            if isinstance(job.recommendation, Recommendation)
+            else job.recommendation
+        )
 
         # Handle JobStatus enum or string
         status_val = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
 
         # Handle ApplicationChannel enum or string
-        channel_val = job.channel.value if isinstance(job.channel, ApplicationChannel) else (str(job.channel) if job.channel else None)
+        channel_val = (
+            job.channel.value
+            if isinstance(job.channel, ApplicationChannel)
+            else (str(job.channel) if job.channel else None)
+        )
 
         params = (
             job.id,
@@ -191,8 +204,14 @@ class JobRepository(JobRepositoryPort):
             True if the job record was found and updated, False otherwise.
         """
         status_val = status.value if isinstance(status, JobStatus) else str(status)
-        rec_val = recommendation.value if isinstance(recommendation, Recommendation) else recommendation
-        channel_val = channel.value if isinstance(channel, ApplicationChannel) else (str(channel) if channel else None)
+        rec_val = (
+            recommendation.value if isinstance(recommendation, Recommendation) else recommendation
+        )
+        channel_val = (
+            channel.value
+            if isinstance(channel, ApplicationChannel)
+            else (str(channel) if channel else None)
+        )
         now_utc = datetime.now(timezone.utc)
 
         query = """
@@ -207,7 +226,16 @@ class JobRepository(JobRepositoryPort):
         WHERE id = ?
         RETURNING id;
         """
-        params = (status_val, fit_score, rec_val, error_message, channel_val, application_log, now_utc, job_id)
+        params = (
+            status_val,
+            fit_score,
+            rec_val,
+            error_message,
+            channel_val,
+            application_log,
+            now_utc,
+            job_id,
+        )
         rows = await self._db.aexecute_write(query, params, checkpoint=True)
         return len(rows) > 0
 
@@ -231,9 +259,17 @@ class JobRepository(JobRepositoryPort):
                 eval_json = json.dumps(job.evaluation)
 
         now_utc = datetime.now(timezone.utc)
-        rec_val = job.recommendation.value if isinstance(job.recommendation, Recommendation) else job.recommendation
+        rec_val = (
+            job.recommendation.value
+            if isinstance(job.recommendation, Recommendation)
+            else job.recommendation
+        )
         status_val = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
-        channel_val = job.channel.value if isinstance(job.channel, ApplicationChannel) else (str(job.channel) if job.channel else None)
+        channel_val = (
+            job.channel.value
+            if isinstance(job.channel, ApplicationChannel)
+            else (str(job.channel) if job.channel else None)
+        )
 
         query = """
         UPDATE job_postings
@@ -322,9 +358,7 @@ class JobRepository(JobRepositoryPort):
         return stats
 
     async def iterate_jobs(
-        self,
-        status: Optional[JobStatus] = None,
-        batch_size: int = 50
+        self, status: Optional[JobStatus] = None, batch_size: int = 50
     ) -> AsyncIterator[JobPosting]:
         """
         Stream job postings from DuckDB with bounded memory consumption.

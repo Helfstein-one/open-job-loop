@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from src.domain.models import JobPosting, JobStatus
 from src.infrastructure.adapters.mcp_client import (
     BaseJobIngestionClient,
     McpConnectionError,
@@ -25,11 +26,11 @@ from src.infrastructure.adapters.mcp_client import (
     parse_job_payload,
 )
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
-from src.domain.models import JobPosting, JobStatus
 
 # ==============================================================================
 # 1. Base Client Contract Tests
 # ==============================================================================
+
 
 class TestBaseJobIngestionClientContract:
     def test_cannot_instantiate_abc(self):
@@ -66,6 +67,7 @@ class TestBaseJobIngestionClientContract:
 # ==============================================================================
 # 2. Payload Normalization Tests
 # ==============================================================================
+
 
 class TestParseJobPayload:
     def test_parse_valid_dict_auto_generates_hash(self):
@@ -125,6 +127,7 @@ class TestParseJobPayload:
 # ==============================================================================
 # 3. Mock MCP Client Tests
 # ==============================================================================
+
 
 class TestMockMcpJobClient:
     @pytest.fixture
@@ -218,7 +221,7 @@ class TestMockMcpJobClient:
             ],
             "mismatches": [
                 {"title": "Mismatch Job 1", "company": "No Fit", "description": "Cobol Mainframe"}
-            ]
+            ],
         }
         with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as tf:
             tf.write(json.dumps(golden_payload))
@@ -304,6 +307,7 @@ class TestMockMcpJobClient:
 # ==============================================================================
 # 4. McpJobClient Subprocess Integration Tests
 # ==============================================================================
+
 
 class TestMcpJobClient:
     @pytest.mark.asyncio

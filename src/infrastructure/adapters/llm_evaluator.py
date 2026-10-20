@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os
+
 """
 Core JobFitEvaluator engine powered by local Instructor and Ollama.
 """
@@ -14,6 +14,8 @@ from instructor.core import InstructorRetryException
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAIError
 from pydantic import ValidationError
 
+from src.application.ports.job_evaluator import JobEvaluatorPort
+from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 from src.infrastructure.adapters.llm_client import (
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
@@ -26,8 +28,6 @@ from src.infrastructure.adapters.llm_prompts import (
     build_evaluation_messages,
     format_candidate_profile,
 )
-from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
-from src.application.ports.job_evaluator import JobEvaluatorPort
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,9 @@ class JobFitEvaluator(JobEvaluatorPort):
             raise LLMError(f"LLM API status error ({exc.status_code}): {exc}") from exc
         except (InstructorRetryException, ValidationError) as exc:
             logger.error("LLM output validation error: %s", exc)
-            raise LLMValidationError(f"LLM response failed MatchEvaluation validation: {exc}") from exc
+            raise LLMValidationError(
+                f"LLM response failed MatchEvaluation validation: {exc}"
+            ) from exc
         except Exception as exc:
             if isinstance(exc, (LLMError, TimeoutError, ValueError)):
                 raise
@@ -186,10 +188,20 @@ class JobFitEvaluator(JobEvaluatorPort):
                         "recommendation": Recommendation.DISCARD,
                     }
                 )
-            elif evaluation.fit_score >= self.score_threshold and evaluation.recommendation != Recommendation.SHORTLIST:
-                evaluation = evaluation.model_copy(update={"recommendation": Recommendation.SHORTLIST})
-            elif evaluation.fit_score < self.score_threshold and evaluation.recommendation != Recommendation.DISCARD:
-                evaluation = evaluation.model_copy(update={"recommendation": Recommendation.DISCARD})
+            elif (
+                evaluation.fit_score >= self.score_threshold
+                and evaluation.recommendation != Recommendation.SHORTLIST
+            ):
+                evaluation = evaluation.model_copy(
+                    update={"recommendation": Recommendation.SHORTLIST}
+                )
+            elif (
+                evaluation.fit_score < self.score_threshold
+                and evaluation.recommendation != Recommendation.DISCARD
+            ):
+                evaluation = evaluation.model_copy(
+                    update={"recommendation": Recommendation.DISCARD}
+                )
 
         return evaluation
 

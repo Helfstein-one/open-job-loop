@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Active Learning module for Open Job Loop.
 
@@ -9,8 +10,8 @@ to DuckDB VSS for continuous learning across applications.
 
 import logging
 from typing import Any, Callable, Dict, Optional
+
 from rich.console import Console
-from rich.prompt import Prompt
 
 from src.application.use_cases.profile import ProfileManager
 
@@ -61,13 +62,14 @@ class ActiveLearningService:
             return synthesized_ans
 
         # Low confidence or missing -> trigger Active Learning
-        logger.info(
-            f"⚠️ Baixa confiança ({confidence:.2f}) na resposta para: '{question}'"
-        )
+        logger.info(f"⚠️ Baixa confiança ({confidence:.2f}) na resposta para: '{question}'")
 
         import sys
+
         if not self.input_fn and (not self.interactive or not sys.stdin.isatty()):
-            logger.info("Modo autônomo ativo: utilizando melhor inferência RAG e gravando no perfil.")
+            logger.info(
+                "Modo autônomo ativo: utilizando melhor inferência RAG e gravando no perfil."
+            )
             final_ans = synthesized_ans if synthesized_ans != "N/A" else "Yes"
             try:
                 await self.profile_manager.record_active_learning_answer(

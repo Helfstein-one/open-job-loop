@@ -34,12 +34,13 @@ from src.application.use_cases.harness import (
     MCPCircuitBreaker,
 )
 from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 from src.domain.models import JobPosting
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 
 # ==============================================================================
 # 1. TextTruncator Boundary & Corner Cases
 # ==============================================================================
+
 
 class TestTier2TextTruncator:
     """Boundary and edge condition tests for TextTruncator."""
@@ -105,7 +106,7 @@ class TestTier2TextTruncator:
         assert result.final_text.endswith("</job_posting>")
 
         # Injected internal closing XML tag must be neutralized to prevent prompt breakout
-        inner_content = result.final_text[len("<job_posting>"): -len("</job_posting>")].strip()
+        inner_content = result.final_text[len("<job_posting>") : -len("</job_posting>")].strip()
         assert "</job_posting>" not in inner_content
         assert "&lt;/job_posting&gt;" in inner_content
 
@@ -113,6 +114,7 @@ class TestTier2TextTruncator:
 # ==============================================================================
 # 2. DuckDB SHA256 Deduplication Corner Cases
 # ==============================================================================
+
 
 class TestTier2DuckDBDeduplication:
     """Deduplication and persistence invariants in DuckDB."""
@@ -179,6 +181,7 @@ class TestTier2DuckDBDeduplication:
 # 3. LocalLoopGuard Boundary & Iteration Limit Tests
 # ==============================================================================
 
+
 class TestTier2LoopGuardLimits:
     """Boundary conditions for LocalLoopGuard."""
 
@@ -224,6 +227,7 @@ class TestTier2LoopGuardLimits:
 # ==============================================================================
 # 4. MCP Circuit Breaker State Machine Tests
 # ==============================================================================
+
 
 class TestTier2CircuitBreakerStateMachine:
     """Verification of CLOSED -> OPEN -> HALF_OPEN -> CLOSED state transitions."""

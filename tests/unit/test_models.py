@@ -39,7 +39,7 @@ def test_match_evaluation_validation():
         matched_skills=["Python", "FastAPI"],
         missing_skills=["Kubernetes"],
         reasoning="Strong candidate match.",
-        seniority_fit="Senior"
+        seniority_fit="Senior",
     )
     assert eval_obj.fit_score == 85
     assert eval_obj.recommendation == Recommendation.SHORTLIST
@@ -59,10 +59,7 @@ def test_match_evaluation_validation():
         MatchEvaluation(fit_score=101, recommendation=Recommendation.SHORTLIST)
 
     # String score coercion check
-    coerced = MatchEvaluation.model_validate({
-        "fit_score": "75",
-        "recommendation": "SHORTLIST"
-    })
+    coerced = MatchEvaluation.model_validate({"fit_score": "75", "recommendation": "SHORTLIST"})
     assert coerced.fit_score == 75
 
 
@@ -78,12 +75,14 @@ def test_match_evaluation_null_skills_coercion():
     assert eval_direct.missing_skills == []
 
     # Dict validation with None
-    eval_dict = MatchEvaluation.model_validate({
-        "fit_score": 75,
-        "recommendation": "DISCARD",
-        "matched_skills": None,
-        "missing_skills": None,
-    })
+    eval_dict = MatchEvaluation.model_validate(
+        {
+            "fit_score": 75,
+            "recommendation": "DISCARD",
+            "matched_skills": None,
+            "missing_skills": None,
+        }
+    )
     assert eval_dict.matched_skills == []
     assert eval_dict.missing_skills == []
 
@@ -100,7 +99,7 @@ def test_job_posting_defaults_and_sync():
         content_hash="abc123hash",
         title="Senior Python Backend Engineer",
         company="Acme Corp",
-        raw_description="Build distributed systems in Python."
+        raw_description="Build distributed systems in Python.",
     )
     # Check auto-generated UUID id
     assert isinstance(job.id, str)
@@ -119,7 +118,7 @@ def test_job_posting_defaults_and_sync():
         title="Lead Engineer",
         company="Beta Inc",
         raw_description="Raw uncleaned text",
-        cleaned_description="Cleaned text"
+        cleaned_description="Cleaned text",
     )
     assert job2.description == "Cleaned text"
     assert job2.cleaned_description == "Cleaned text"
@@ -130,7 +129,7 @@ def test_job_posting_defaults_and_sync():
         title="Staff Engineer",
         company="Gamma LLC",
         raw_description="Raw text",
-        description="Explicit description"
+        description="Explicit description",
     )
     assert job3.cleaned_description == "Explicit description"
     assert job3.description == "Explicit description"
@@ -143,7 +142,7 @@ def test_candidate_profile_context_generation():
         years_experience=7,
         primary_skills=["Python", "DuckDB", "AsyncIO"],
         secondary_skills=["Docker", "Linux"],
-        summary="Specialist in high-throughput data processing pipelines."
+        summary="Specialist in high-throughput data processing pipelines.",
     )
     prompt_str = profile.to_prompt_context()
     assert "Alex Mercer" in prompt_str
@@ -159,7 +158,7 @@ def test_candidate_profile_validation():
             name="Invalid Candidate",
             target_role="Dev",
             years_experience=-2,
-            summary="Invalid negative experience."
+            summary="Invalid negative experience.",
         )
 
 
@@ -170,7 +169,7 @@ def test_candidate_profile_empty_skills_context():
         years_experience=0,
         primary_skills=[],
         secondary_skills=[],
-        summary="Recent graduate."
+        summary="Recent graduate.",
     )
     prompt_str = profile.to_prompt_context()
     assert "None specified" in prompt_str

@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-asyncio pytest-cov
+          pip install -e ".[dev]" pytest pytest-asyncio pytest-cov
       - name: Run Unit Tests
         run: pytest tests/ -k "not e2e and not adversarial and not tier5" --cov=src
 
@@ -57,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-asyncio
+          pip install -e ".[dev]" pytest pytest-asyncio
       - name: Run Adversarial Tests
         run: pytest tests/ -k "adversarial or tier5"
 
@@ -74,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-asyncio
+          pip install -e ".[dev]" pytest pytest-asyncio
       - name: Install Ollama (Mock/Local)
         run: |
           curl -fsSL https://ollama.com/install.sh | sh

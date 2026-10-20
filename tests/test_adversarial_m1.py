@@ -11,16 +11,17 @@ import pytest
 from pydantic import ValidationError
 
 from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator
-from src.infrastructure.adapters.repository import JobRepository
 from src.domain.models import (
     JobPosting,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.repository import JobRepository
 
 # ==============================================================================
 # SECTION 1: TextTruncator Stress Tests & Failure Mode Demonstrations
 # ==============================================================================
+
 
 class TestTextTruncatorAdversarial:
 
@@ -30,18 +31,21 @@ class TestTextTruncatorAdversarial:
 
     # --- 1.1 Empty & Whitespace Variations ---
 
-    @pytest.mark.parametrize("empty_input", [
-        "",
-        "   ",
-        "\t\t\t\t\t",
-        "\n\n\n\n\n\n",
-        " \t \n \r \v \f ",
-        " " * 1000,
-        "\u00a0" * 60,  # Non-breaking space
-        "\u2000" * 60,  # En quad
-        "\u2003" * 60,  # Em quad
-        "\u3000" * 60,  # Ideographic space
-    ])
+    @pytest.mark.parametrize(
+        "empty_input",
+        [
+            "",
+            "   ",
+            "\t\t\t\t\t",
+            "\n\n\n\n\n\n",
+            " \t \n \r \v \f ",
+            " " * 1000,
+            "\u00a0" * 60,  # Non-breaking space
+            "\u2000" * 60,  # En quad
+            "\u2003" * 60,  # Em quad
+            "\u3000" * 60,  # Ideographic space
+        ],
+    )
     def test_empty_and_whitespace_inputs_rejected(self, truncator: TextTruncator, empty_input: str):
         with pytest.raises(DescriptionTooShortError):
             truncator.truncate(empty_input)
@@ -102,7 +106,9 @@ class TestTextTruncatorAdversarial:
 
     # --- 1.3 Huge Strings & Performance (>100k chars) ---
 
-    def test_huge_string_100k_chars_execution_time_and_token_ceiling(self, truncator: TextTruncator):
+    def test_huge_string_100k_chars_execution_time_and_token_ceiling(
+        self, truncator: TextTruncator
+    ):
         sentence = "We are seeking a seasoned backend architect with distributed systems mastery. "
         repeats = 100_000 // len(sentence) + 1
         huge_text = (sentence * repeats)[:100_000]
@@ -131,7 +137,11 @@ class TestTextTruncatorAdversarial:
         assert "[...Description truncated for context window ceiling...]" in result.final_text
 
     def test_huge_string_with_deeply_nested_html_and_unclosed_tags(self, truncator: TextTruncator):
-        dirty_html = "<div><span><p><b>" * 5_000 + "Senior Engineer Job Description " * 100 + "</b></p></span></div>" * 5_000
+        dirty_html = (
+            "<div><span><p><b>" * 5_000
+            + "Senior Engineer Job Description " * 100
+            + "</b></p></span></div>" * 5_000
+        )
         start = time.perf_counter()
         result = truncator.process(dirty_html)
         duration = time.perf_counter() - start
@@ -144,7 +154,9 @@ class TestTextTruncatorAdversarial:
 
     # --- 1.4 Empirical Failure Modes & Vulnerabilities ---
 
-    def test_bug_boilerplate_catastrophic_overstripping_on_single_newlines(self, truncator: TextTruncator):
+    def test_bug_boilerplate_catastrophic_overstripping_on_single_newlines(
+        self, truncator: TextTruncator
+    ):
         """
         EMPIRICAL DEFECT DEMONSTRATION:
         When a job posting uses single newlines or minified HTML, regexes ending in
@@ -184,7 +196,9 @@ class TestTextTruncatorAdversarial:
         assert "Requirements: 5+ years of Python, SQL, and Docker experience." in cleaned
         assert "Salary: $180,000." in cleaned
 
-    def test_vulnerability_prompt_injection_case_and_whitespace_bypass(self, truncator: TextTruncator):
+    def test_vulnerability_prompt_injection_case_and_whitespace_bypass(
+        self, truncator: TextTruncator
+    ):
         """
         EMPIRICAL VULNERABILITY DEMONSTRATION:
         wrap_delimiters uses text.replace('</job_posting>', ...) which is case-sensitive
@@ -227,6 +241,7 @@ class TestTextTruncatorAdversarial:
 # SECTION 2: Pydantic Schemas Stress Tests & Edge Cases
 # ==============================================================================
 
+
 class TestSchemasAdversarial:
 
     def test_match_evaluation_score_boundaries(self):
@@ -255,12 +270,14 @@ class TestSchemasAdversarial:
         When an LLM returns null for matched_skills or missing_skills,
         MatchEvaluation coerces them to empty lists [] instead of raising ValidationError.
         """
-        eval_obj = MatchEvaluation.model_validate({
-            "fit_score": 80,
-            "recommendation": "SHORTLIST",
-            "matched_skills": None,
-            "missing_skills": None,
-        })
+        eval_obj = MatchEvaluation.model_validate(
+            {
+                "fit_score": 80,
+                "recommendation": "SHORTLIST",
+                "matched_skills": None,
+                "missing_skills": None,
+            }
+        )
         assert eval_obj.matched_skills == []
         assert eval_obj.missing_skills == []
 
@@ -286,18 +303,20 @@ class TestSchemasAdversarial:
             )  # Missing content_hash
 
     def test_job_posting_nested_evaluation_payload(self):
-        job = JobPosting.model_validate({
-            "content_hash": "h123",
-            "title": "Backend Lead",
-            "company": "Tech Corp",
-            "raw_description": "We need a lead engineer.",
-            "evaluation": {
-                "fit_score": 88,
-                "recommendation": "SHORTLIST",
-                "matched_skills": ["Python", "DuckDB"],
-                "reasoning": "Fits tech stack perfectly.",
+        job = JobPosting.model_validate(
+            {
+                "content_hash": "h123",
+                "title": "Backend Lead",
+                "company": "Tech Corp",
+                "raw_description": "We need a lead engineer.",
+                "evaluation": {
+                    "fit_score": 88,
+                    "recommendation": "SHORTLIST",
+                    "matched_skills": ["Python", "DuckDB"],
+                    "reasoning": "Fits tech stack perfectly.",
+                },
             }
-        })
+        )
         assert isinstance(job.evaluation, MatchEvaluation)
         assert job.evaluation.fit_score == 88
 

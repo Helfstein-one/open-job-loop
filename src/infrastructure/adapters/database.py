@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 DuckDB Database Manager and Connection Lifecycle.
 
@@ -11,15 +12,14 @@ import asyncio
 import json
 import logging
 import os
-from pathlib import Path
 import re
 import signal
 import threading
 import time
+from pathlib import Path
 from typing import Any, List, Optional, Sequence, Tuple
 
 import duckdb
-
 
 # Table and Index DDL Statements
 DDL_CREATE_JOB_POSTINGS_TABLE = """
@@ -105,7 +105,7 @@ class DatabaseManager:
         self.db_path = db_path
         self._lock = threading.RLock()
         self._conn: Optional[duckdb.DuckDBPyConnection] = None
-        self._is_memory = (db_path == ":memory:")
+        self._is_memory = db_path == ":memory:"
 
     def connect(self) -> duckdb.DuckDBPyConnection:
         """
@@ -117,7 +117,7 @@ class DatabaseManager:
                 if not self._is_memory:
                     parent_dir = Path(self.db_path).resolve().parent
                     parent_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 max_retries = 3
                 for attempt in range(max_retries):
                     try:
@@ -127,7 +127,7 @@ class DatabaseManager:
                         err_str = str(e)
                         if "lock on file" in err_str.lower():
                             # Auto self-healing: if a Code Helper / plugin holds a conflicting lock, release it
-                            match = re.search(r'\(PID\s+(\d+)\)', err_str)
+                            match = re.search(r"\(PID\s+(\d+)\)", err_str)
                             if match:
                                 try:
                                     target_pid = int(match.group(1))
@@ -143,7 +143,9 @@ class DatabaseManager:
                 # Configure pragmas for performance and durability
                 self._conn.execute("PRAGMA threads=4;")
                 try:
-                    self._conn.execute("INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;")
+                    self._conn.execute(
+                        "INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;"
+                    )
                 except Exception:
                     pass
             return self._conn
@@ -161,7 +163,9 @@ class DatabaseManager:
             conn.execute(DDL_CREATE_INDEX_CREATED_AT)
             try:
                 conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS channel VARCHAR;")
-                conn.execute("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;")
+                conn.execute(
+                    "ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS application_log TEXT;"
+                )
                 conn.execute(DDL_CREATE_AUDIT_LOG_TABLE)
                 conn.execute(DDL_CREATE_EXECUTION_LOGS_TABLE)
                 conn.execute(DDL_CREATE_INDEX_EXECUTION_LOGS_TIMESTAMP)
@@ -170,10 +174,7 @@ class DatabaseManager:
             conn.execute("CHECKPOINT;")
 
     def execute_write(
-        self,
-        query: str,
-        params: Sequence[Any] = (),
-        checkpoint: bool = True
+        self, query: str, params: Sequence[Any] = (), checkpoint: bool = True
     ) -> List[Tuple[Any, ...]]:
         """
         Execute a mutating SQL statement (INSERT, UPDATE, DELETE) under the write lock,
@@ -200,9 +201,7 @@ class DatabaseManager:
                 cursor.close()
 
     def execute_read(
-        self,
-        query: str,
-        params: Sequence[Any] = ()
+        self, query: str, params: Sequence[Any] = ()
     ) -> Tuple[List[str], List[Tuple[Any, ...]]]:
         """
         Execute a read-only SQL query without write locks.
@@ -268,18 +267,13 @@ class DatabaseManager:
         await asyncio.to_thread(self.initialize)
 
     async def aexecute_write(
-        self,
-        query: str,
-        params: Sequence[Any] = (),
-        checkpoint: bool = True
+        self, query: str, params: Sequence[Any] = (), checkpoint: bool = True
     ) -> List[Tuple[Any, ...]]:
         """Asynchronously execute a write operation on a worker thread."""
         return await asyncio.to_thread(self.execute_write, query, params, checkpoint)
 
     async def aexecute_read(
-        self,
-        query: str,
-        params: Sequence[Any] = ()
+        self, query: str, params: Sequence[Any] = ()
     ) -> Tuple[List[str], List[Tuple[Any, ...]]]:
         """Asynchronously execute a read query on a worker thread."""
         return await asyncio.to_thread(self.execute_read, query, params)
@@ -343,7 +337,9 @@ class DuckDBLoggingHandler(logging.Handler):
                 else:
                     conn = duckdb.connect(self.db_path, read_only=False)
                     try:
-                        conn.execute("INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;")
+                        conn.execute(
+                            "INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence=true;"
+                        )
                     except Exception:
                         pass
                     conn.execute(

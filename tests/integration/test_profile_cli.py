@@ -1,5 +1,5 @@
-import pytest
 from typer.testing import CliRunner
+
 from src.presentation.cli import app
 
 runner = CliRunner()

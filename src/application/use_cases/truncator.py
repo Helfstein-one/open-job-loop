@@ -1,24 +1,27 @@
 from __future__ import annotations
+
 """
 Job description pre-processor, boilerplate stripper, and context ceiling truncator.
 """
 
 
-from dataclasses import dataclass
 import html
 import math
 import re
+from dataclasses import dataclass
 from typing import Optional
 
 
 class DescriptionTooShortError(ValueError):
     """Raised when a job description contains 50 or fewer characters of meaningful content."""
+
     pass
 
 
 @dataclass(frozen=True)
 class TruncationResult:
     """Metadata container for text truncation operations."""
+
     raw_text: str
     cleaned_text: str
     final_text: str

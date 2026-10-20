@@ -16,9 +16,9 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
-from src.presentation.cli import app, main
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.presentation.cli import app, main
 from src.presentation.ui_banner import (
     TAGLINE,
     get_banner_panel,
@@ -46,6 +46,7 @@ def runner() -> CliRunner:
 # CLI Entry Point & Help Tests
 # ==============================================================================
 
+
 def test_cli_app_callable():
     """Verify app is a Typer instance and main is callable."""
     assert callable(app)
@@ -65,6 +66,7 @@ def test_cli_help(runner: CliRunner):
 # ==============================================================================
 # Banner Command & UI Tests
 # ==============================================================================
+
 
 def test_cli_banner_command(runner: CliRunner):
     """Verify `jobloop banner` renders ASCII art banner and tagline."""
@@ -100,6 +102,7 @@ def test_banner_panel_helper():
 # ==============================================================================
 # Stats Command Tests
 # ==============================================================================
+
 
 def test_cli_stats_empty_db(runner: CliRunner, tmp_path: Path):
     """Verify `jobloop stats` on an empty database displays 0 records notice."""
@@ -151,6 +154,7 @@ async def test_cli_stats_populated_db(runner: CliRunner, tmp_path: Path):
 # ==============================================================================
 # Run Command Tests
 # ==============================================================================
+
 
 def test_cli_run_invalid_limit(runner: CliRunner):
     """Verify `jobloop run` rejects non-positive limit."""
@@ -279,6 +283,7 @@ def test_cli_run_cascade_flags(runner: CliRunner, tmp_path: Path):
 # ==============================================================================
 # UI Module Direct Tests
 # ==============================================================================
+
 
 def test_ui_factory_selection():
     """Verify create_pipeline_ui selects correct UI manager."""

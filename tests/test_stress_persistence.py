@@ -28,9 +28,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation
 from src.infrastructure.adapters.database import DatabaseManager
 from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
-from src.domain.models import JobPosting, JobStatus, MatchEvaluation, Recommendation
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ def test_multithreaded_read_write_concurrency(stress_temp_db: str) -> None:
                     "INSERT INTO job_postings (id, content_hash, title, company, raw_description, status) "
                     "VALUES (?, ?, ?, ?, ?, ?);",
                     (f"t-{i}", f"h-{i}", f"Title {i}", "Co", "Desc", "INGESTED"),
-                    checkpoint=(op == 0)
+                    checkpoint=(op == 0),
                 )
             elif op == 2:
                 db.execute_read("SELECT count(*), max(id) FROM job_postings;")
@@ -161,13 +161,13 @@ async def test_streaming_iteration_o1_ram(stress_temp_db: str) -> None:
             f"Software Engineer {i}",
             "Enterprise Corp",
             "Job description payload text " * 15,
-            "INGESTED"
+            "INGESTED",
         )
         for i in range(TOTAL_ROWS)
     ]
     conn.executemany(
         "INSERT INTO job_postings (id, content_hash, title, company, raw_description, status) VALUES (?, ?, ?, ?, ?, ?);",
-        batch
+        batch,
     )
     conn.execute("CHECKPOINT;")
 
@@ -188,7 +188,9 @@ async def test_streaming_iteration_o1_ram(stress_temp_db: str) -> None:
     assert stream_count == TOTAL_ROWS
 
     # Peak memory during streaming must remain under 300 KB (O(1) footprint)
-    assert final_stream_peak < 350 * 1024, f"Streaming heap peak was too high: {final_stream_peak / 1024:.1f} KB"
+    assert (
+        final_stream_peak < 350 * 1024
+    ), f"Streaming heap peak was too high: {final_stream_peak / 1024:.1f} KB"
 
     # Contrast with bulk in-memory load
     gc.collect()
@@ -225,7 +227,7 @@ async def test_immediate_wal_checkpoint_flush(stress_temp_db: str) -> None:
             title=f"title {i}",
             company="Co",
             raw_description=f"desc {i}",
-            status=JobStatus.INGESTED
+            status=JobStatus.INGESTED,
         )
         await repo.save_job(job)
         # Verify WAL file does not accumulate dirty data
@@ -288,7 +290,9 @@ asyncio.run(main())
     # At least 21 items must be durable
     assert rows[0][0] >= 21
     # Check that individual rows are readable and uncorrupted
-    _cols, row_sample = db.execute_read("SELECT id, title, raw_description FROM job_postings WHERE id = 'sigkill-0';")
+    _cols, row_sample = db.execute_read(
+        "SELECT id, title, raw_description FROM job_postings WHERE id = 'sigkill-0';"
+    )
     assert len(row_sample) == 1
     assert row_sample[0][0] == "sigkill-0"
     db.close()
@@ -305,7 +309,9 @@ async def test_status_transitions_and_error_handling(stress_temp_db: str) -> Non
 
     job = JobPosting(
         id="stat-job-1",
-        content_hash=compute_job_hash("Status transition test description", title="Lead Engineer", company="Nova"),
+        content_hash=compute_job_hash(
+            "Status transition test description", title="Lead Engineer", company="Nova"
+        ),
         title="Lead Engineer",
         company="Nova",
         raw_description="Status transition test description",
@@ -324,7 +330,7 @@ async def test_status_transitions_and_error_handling(stress_temp_db: str) -> Non
         recommendation=Recommendation.DISCARD,
         matched_skills=["Python"],
         missing_skills=["Rust", "Kubernetes"],
-        reasoning="Insufficient systems experience."
+        reasoning="Insufficient systems experience.",
     )
     job.status = JobStatus.TRIAGED
     job.fit_score = 35

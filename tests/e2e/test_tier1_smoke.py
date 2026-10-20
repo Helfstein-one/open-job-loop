@@ -13,9 +13,9 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
-from src.presentation.cli import app
-from src.infrastructure.adapters.repository import JobRepository
 from src.domain.models import JobPosting, JobStatus, Recommendation
+from src.infrastructure.adapters.repository import JobRepository
+from src.presentation.cli import app
 
 runner = CliRunner()
 
@@ -146,7 +146,12 @@ class TestTier1RunOptionValidation:
     def test_run_invalid_threshold_above_100(self, temp_db_path):
         result = runner.invoke(app, ["run", "--mock", "--threshold", "150", "--db", temp_db_path])
         assert result.exit_code != 0
-        assert "Invalid value" in result.stderr or "Invalid value" in result.stdout or "150" in result.stdout or "150" in result.stderr
+        assert (
+            "Invalid value" in result.stderr
+            or "Invalid value" in result.stdout
+            or "150" in result.stdout
+            or "150" in result.stderr
+        )
 
     def test_run_invalid_threshold_negative(self, temp_db_path):
         result = runner.invoke(app, ["run", "--mock", "--threshold", "-10", "--db", temp_db_path])
@@ -157,7 +162,9 @@ class TestTier1RunOptionValidation:
         assert result.exit_code != 0
 
     def test_run_invalid_max_iterations_zero(self, temp_db_path):
-        result = runner.invoke(app, ["run", "--mock", "--max-iterations", "0", "--db", temp_db_path])
+        result = runner.invoke(
+            app, ["run", "--mock", "--max-iterations", "0", "--db", temp_db_path]
+        )
         assert result.exit_code != 0
 
     def test_run_invalid_timeout_zero(self, temp_db_path):

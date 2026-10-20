@@ -1,17 +1,17 @@
 import asyncio
 import json
-import os
-import random
 import logging
+import random
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import duckdb
 from playwright.async_api import async_playwright
 
-from src.application.use_cases.profile import ProfileManager
 from src.application.use_cases.active_learning import ActiveLearningService
-from src.infrastructure.adapters.ats.router import get_ats_adapter, detect_channel
+from src.application.use_cases.profile import ProfileManager
 from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.router import get_ats_adapter
 from src.infrastructure.adapters.database import setup_duckdb_logging
 
 logger = logging.getLogger(__name__)
@@ -182,7 +182,9 @@ class AutoApplyWorker:
                 browser = await p.chromium.launch(headless=self.headless)
                 context = await browser.new_context(storage_state=actual_state_file)
             else:
-                logger.warning("Nenhum arquivo de sessão (linkedin_state.json) encontrado. Navegando sem autenticação prévia.")
+                logger.warning(
+                    "Nenhum arquivo de sessão (linkedin_state.json) encontrado. Navegando sem autenticação prévia."
+                )
                 browser = await p.chromium.launch(headless=self.headless)
                 context = await browser.new_context()
 
@@ -195,12 +197,18 @@ class AutoApplyWorker:
                     eval_raw = job_row[4]
                     if eval_raw:
                         try:
-                            eval_data = json.loads(eval_raw) if isinstance(eval_raw, str) else eval_raw
+                            eval_data = (
+                                json.loads(eval_raw) if isinstance(eval_raw, str) else eval_raw
+                            )
                             rationale = eval_data.get("reasoning", "")
                             matched = eval_data.get("matched_skills", [])
-                            matched_skills = ", ".join(matched) if isinstance(matched, list) else str(matched)
+                            matched_skills = (
+                                ", ".join(matched) if isinstance(matched, list) else str(matched)
+                            )
                             missing = eval_data.get("missing_skills", [])
-                            missing_skills = ", ".join(missing) if isinstance(missing, list) else str(missing)
+                            missing_skills = (
+                                ", ".join(missing) if isinstance(missing, list) else str(missing)
+                            )
                         except Exception:
                             pass
                 elif len(job_row) >= 7:
@@ -223,7 +231,9 @@ class AutoApplyWorker:
                     # 1. Direct ATS Detection
                     ats_adapter = get_ats_adapter(url)
                     if ats_adapter:
-                        logger.info(f"Vaga no ATS externo ({ats_adapter.channel.value}) detectada para {title}.")
+                        logger.info(
+                            f"Vaga no ATS externo ({ats_adapter.channel.value}) detectada para {title}."
+                        )
                         app_res = await ats_adapter.fill_and_submit(
                             page=page,
                             url=url,
@@ -232,7 +242,11 @@ class AutoApplyWorker:
                             resume_path=self.resume_path,
                             dry_run=self.dry_run,
                         )
-                        new_status = ("APPLIED_DRY_RUN" if self.dry_run else "APPLIED") if app_res.success else "FAILED_TO_APPLY"
+                        new_status = (
+                            ("APPLIED_DRY_RUN" if self.dry_run else "APPLIED")
+                            if app_res.success
+                            else "FAILED_TO_APPLY"
+                        )
                         if app_res.success:
                             stats["applied"] += 1
                         else:
@@ -241,7 +255,13 @@ class AutoApplyWorker:
                         app_log = "\n".join(app_res.logs)
                         conn.execute(
                             "UPDATE job_postings SET status = ?, channel = ?, application_log = ?, error_message = ? WHERE id = ?",
-                            (new_status, app_res.channel.value, app_log, app_res.error_message, job_id),
+                            (
+                                new_status,
+                                app_res.channel.value,
+                                app_log,
+                                app_res.error_message,
+                                job_id,
+                            ),
                         )
                         conn.execute("CHECKPOINT;")
                         continue
@@ -269,7 +289,15 @@ class AutoApplyWorker:
 
                     # Detecção proativa de Checkpoint / Auth Challenge
                     current_url = page.url.lower()
-                    if any(barrier in current_url for barrier in ["/uas/login", "/checkpoint/", "/challenge/", "security-check"]):
+                    if any(
+                        barrier in current_url
+                        for barrier in [
+                            "/uas/login",
+                            "/checkpoint/",
+                            "/challenge/",
+                            "security-check",
+                        ]
+                    ):
                         logger.warning(
                             f"🚨 LinkedIn Checkpoint / Barreira de Autenticação detectada em {page.url}! "
                             f"Pausando candidaturas LinkedIn para salvaguardar a integridade da conta."
@@ -282,7 +310,9 @@ class AutoApplyWorker:
                         stats["skipped"] += 1
                         continue
 
-                    easy_apply_button = page.locator("button:has-text('Easy Apply'), button:has-text('Candidatura simplificada')").first
+                    easy_apply_button = page.locator(
+                        "button:has-text('Easy Apply'), button:has-text('Candidatura simplificada')"
+                    ).first
                     if await easy_apply_button.count() > 0 and await easy_apply_button.is_visible():
                         logger.info(f"Botão Easy Apply detectado para {title}. Abrindo modal...")
                         await easy_apply_button.click()
@@ -296,20 +326,28 @@ class AutoApplyWorker:
                                 file_input = page.locator("input[type='file']").first
                                 if await file_input.count() > 0:
                                     try:
-                                        await file_input.set_input_files(str(Path(self.resume_path).resolve()))
-                                        logger.info(f"  [Anexo CV] Currículo anexado na modal: {self.resume_path}")
+                                        await file_input.set_input_files(
+                                            str(Path(self.resume_path).resolve())
+                                        )
+                                        logger.info(
+                                            f"  [Anexo CV] Currículo anexado na modal: {self.resume_path}"
+                                        )
                                     except Exception:
                                         pass
 
                             # Identifica labels de campos de entrada (input, textarea, select)
-                            labels = await page.locator("label.artdeco-text-input--label, label[for]").all()
+                            labels = await page.locator(
+                                "label.artdeco-text-input--label, label[for]"
+                            ).all()
                             for label in labels:
                                 question_text = (await label.inner_text()).strip()
                                 input_id = await label.get_attribute("for")
                                 if input_id and question_text:
                                     input_element = page.locator(f"#{input_id}")
                                     if await input_element.count() > 0:
-                                        tag_name = await input_element.evaluate("el => el.tagName.toLowerCase()")
+                                        tag_name = await input_element.evaluate(
+                                            "el => el.tagName.toLowerCase()"
+                                        )
                                         if tag_name == "select":
                                             val = await input_element.input_value()
                                             if not val or val in ["Select an option", ""]:
@@ -318,7 +356,9 @@ class AutoApplyWorker:
                                                     job_context=job_ctx,
                                                 )
                                                 selected = False
-                                                for opt in await input_element.locator("option").all():
+                                                for opt in await input_element.locator(
+                                                    "option"
+                                                ).all():
                                                     opt_text = (await opt.inner_text()).strip()
                                                     if (
                                                         answer.lower() == opt_text.lower()
@@ -327,20 +367,28 @@ class AutoApplyWorker:
                                                     ):
                                                         opt_val = await opt.get_attribute("value")
                                                         if opt_val:
-                                                            await input_element.select_option(value=opt_val)
+                                                            await input_element.select_option(
+                                                                value=opt_val
+                                                            )
                                                             selected = True
                                                             break
                                                 if not selected:
                                                     try:
-                                                        await input_element.select_option(label=str(answer))
+                                                        await input_element.select_option(
+                                                            label=str(answer)
+                                                        )
                                                     except Exception:
                                                         pass
-                                                submitted_fields.append({
-                                                    "question": question_text,
-                                                    "answer": str(answer),
-                                                    "type": "select",
-                                                })
-                                                logger.info(f"  [Dropdown Selecionado] '{question_text}' -> '{answer}'")
+                                                submitted_fields.append(
+                                                    {
+                                                        "question": question_text,
+                                                        "answer": str(answer),
+                                                        "type": "select",
+                                                    }
+                                                )
+                                                logger.info(
+                                                    f"  [Dropdown Selecionado] '{question_text}' -> '{answer}'"
+                                                )
                                         elif await input_element.is_editable():
                                             current_val = await input_element.input_value()
                                             if not current_val:
@@ -349,12 +397,16 @@ class AutoApplyWorker:
                                                     job_context=job_ctx,
                                                 )
                                                 await input_element.fill(str(answer))
-                                                submitted_fields.append({
-                                                    "question": question_text,
-                                                    "answer": str(answer),
-                                                    "type": "text",
-                                                })
-                                                logger.info(f"  [Campo Respondido (Active Learning RAG)] '{question_text}' -> '{answer}'")
+                                                submitted_fields.append(
+                                                    {
+                                                        "question": question_text,
+                                                        "answer": str(answer),
+                                                        "type": "text",
+                                                    }
+                                                )
+                                                logger.info(
+                                                    f"  [Campo Respondido (Active Learning RAG)] '{question_text}' -> '{answer}'"
+                                                )
 
                             # Identifica perguntas de rádio/opções (fieldset)
                             fieldsets = await page.locator("fieldset").all()
@@ -363,17 +415,25 @@ class AutoApplyWorker:
                                 if await legend.count() > 0:
                                     q_text = (await legend.inner_text()).strip()
                                     if q_text:
-                                        answer = await active_learning.get_or_learn_answer(q_text, job_context=job_ctx)
-                                        target_radio = fs.locator(f"label:has-text('{answer}')").first
+                                        answer = await active_learning.get_or_learn_answer(
+                                            q_text, job_context=job_ctx
+                                        )
+                                        target_radio = fs.locator(
+                                            f"label:has-text('{answer}')"
+                                        ).first
                                         if await target_radio.count() > 0:
                                             try:
                                                 await target_radio.click()
-                                                submitted_fields.append({
-                                                    "question": q_text,
-                                                    "answer": str(answer),
-                                                    "type": "radio",
-                                                })
-                                                logger.info(f"  [Radio Selecionado] '{q_text}' -> '{answer}'")
+                                                submitted_fields.append(
+                                                    {
+                                                        "question": q_text,
+                                                        "answer": str(answer),
+                                                        "type": "radio",
+                                                    }
+                                                )
+                                                logger.info(
+                                                    f"  [Radio Selecionado] '{q_text}' -> '{answer}'"
+                                                )
                                             except Exception:
                                                 pass
 
@@ -389,14 +449,18 @@ class AutoApplyWorker:
 
                             if await submit_button.count() > 0 and await submit_button.is_visible():
                                 if self.dry_run:
-                                    logger.info(f"  [DRY-RUN] Tela final de submissão alcançada para {title}. Submissão evitada.")
+                                    logger.info(
+                                        f"  [DRY-RUN] Tela final de submissão alcançada para {title}. Submissão evitada."
+                                    )
                                     break
                                 else:
                                     logger.info(f"Submetendo candidatura oficial para {title}...")
                                     await submit_button.click()
                                     await asyncio.sleep(2)
                                     break
-                            elif await review_button.count() > 0 and await review_button.is_visible():
+                            elif (
+                                await review_button.count() > 0 and await review_button.is_visible()
+                            ):
                                 await review_button.click()
                                 await asyncio.sleep(1.5)
                             elif await next_button.count() > 0 and await next_button.is_visible():
@@ -410,7 +474,12 @@ class AutoApplyWorker:
                         channel_val = ApplicationChannel.LINKEDIN_EASY_APPLY.value
                         conn.execute(
                             "UPDATE job_postings SET status = ?, channel = ?, application_log = ? WHERE id = ?",
-                            (new_status, channel_val, f"Easy Apply completed (dry_run={self.dry_run})", job_id),
+                            (
+                                new_status,
+                                channel_val,
+                                f"Easy Apply completed (dry_run={self.dry_run})",
+                                job_id,
+                            ),
                         )
                         conn.execute(
                             """
@@ -430,19 +499,29 @@ class AutoApplyWorker:
                         conn.execute("CHECKPOINT;")
                         stats["applied"] += 1
                         daily_linkedin_apps += 1
-                        logger.info(f"✅ Candidatura finalizada com sucesso ({new_status}) para {title}")
+                        logger.info(
+                            f"✅ Candidatura finalizada com sucesso ({new_status}) para {title}"
+                        )
 
-                        jitter_sec = random.uniform(self.linkedin_jitter_range[0], self.linkedin_jitter_range[1])
-                        logger.info(f"⏳ Jitter humano anti-bot: aguardando {jitter_sec:.1f}s antes da próxima ação...")
+                        jitter_sec = random.uniform(
+                            self.linkedin_jitter_range[0], self.linkedin_jitter_range[1]
+                        )
+                        logger.info(
+                            f"⏳ Jitter humano anti-bot: aguardando {jitter_sec:.1f}s antes da próxima ação..."
+                        )
                         await asyncio.sleep(jitter_sec)
                     else:
                         # 3. Check for external application redirection
-                        ext_apply = page.locator("button.jobs-apply-button, a.jobs-apply-button, a:has-text('Apply')").first
+                        ext_apply = page.locator(
+                            "button.jobs-apply-button, a.jobs-apply-button, a:has-text('Apply')"
+                        ).first
                         if await ext_apply.count() > 0:
                             ext_href = await ext_apply.get_attribute("href")
                             if ext_href and get_ats_adapter(ext_href):
                                 dest_adapter = get_ats_adapter(ext_href)
-                                logger.info(f"Redirecionamento ATS detectado ({dest_adapter.channel.value}): {ext_href}")
+                                logger.info(
+                                    f"Redirecionamento ATS detectado ({dest_adapter.channel.value}): {ext_href}"
+                                )
                                 app_res = await dest_adapter.fill_and_submit(
                                     page=page,
                                     url=ext_href,
@@ -451,7 +530,11 @@ class AutoApplyWorker:
                                     resume_path=self.resume_path,
                                     dry_run=self.dry_run,
                                 )
-                                new_status = ("APPLIED_DRY_RUN" if self.dry_run else "APPLIED") if app_res.success else "FAILED_TO_APPLY"
+                                new_status = (
+                                    ("APPLIED_DRY_RUN" if self.dry_run else "APPLIED")
+                                    if app_res.success
+                                    else "FAILED_TO_APPLY"
+                                )
                                 if app_res.success:
                                     stats["applied"] += 1
                                 else:
@@ -459,7 +542,13 @@ class AutoApplyWorker:
                                 app_log = "\n".join(app_res.logs)
                                 conn.execute(
                                     "UPDATE job_postings SET status = ?, channel = ?, application_log = ?, error_message = ? WHERE id = ?",
-                                    (new_status, app_res.channel.value, app_log, app_res.error_message, job_id),
+                                    (
+                                        new_status,
+                                        app_res.channel.value,
+                                        app_log,
+                                        app_res.error_message,
+                                        job_id,
+                                    ),
                                 )
                                 conn.execute(
                                     """
@@ -472,14 +561,18 @@ class AutoApplyWorker:
                                         company,
                                         app_res.channel.value,
                                         new_status,
-                                        json.dumps([{"log": l} for l in app_res.logs], ensure_ascii=False),
+                                        json.dumps(
+                                            [{"log": l} for l in app_res.logs], ensure_ascii=False
+                                        ),
                                         app_log,
                                     ),
                                 )
                                 conn.execute("CHECKPOINT;")
                                 continue
 
-                        logger.info(f"Sem botão de Easy Apply ou ATS suportado para {title}. Marcando como NEEDS_REVIEW.")
+                        logger.info(
+                            f"Sem botão de Easy Apply ou ATS suportado para {title}. Marcando como NEEDS_REVIEW."
+                        )
                         conn.execute(
                             "UPDATE job_postings SET status = 'NEEDS_REVIEW', channel = 'EXTERNAL_MANUAL' WHERE id = ?",
                             (job_id,),

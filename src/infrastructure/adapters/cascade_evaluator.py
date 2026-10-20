@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Cascade Job Evaluator for Open Job Loop.
 
@@ -12,19 +13,16 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Optional
-import duckdb
-from openai import AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError
 
+import duckdb
+from openai import AsyncOpenAI
+
+from src.application.use_cases.profile import compute_mock_embedding
 from src.domain.models import CandidateProfile, MatchEvaluation, Recommendation
 from src.infrastructure.adapters.llm_evaluator import (
     JobFitEvaluator,
     format_candidate_profile,
-    LLMError,
-    LLMTimeoutError,
-    LLMConnectionError,
-    LLMModelNotFoundError,
 )
-from src.application.use_cases.profile import compute_mock_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +92,11 @@ class CascadeJobEvaluator(JobFitEvaluator):
         # ----------------------------------------------------------------------
         # Tier 0: DuckDB VSS Vector Pre-Check (0ms LLM)
         # ----------------------------------------------------------------------
-        if self.enable_vss_prefilter and self.db_path and (self.mock_mode or Path(self.db_path).exists()):
+        if (
+            self.enable_vss_prefilter
+            and self.db_path
+            and (self.mock_mode or Path(self.db_path).exists())
+        ):
             vss_score = await self._check_vss_similarity(job_description)
             if vss_score is not None and vss_score < self.vss_min_similarity:
                 logger.info(
@@ -217,7 +219,10 @@ class CascadeJobEvaluator(JobFitEvaluator):
                 resp = await self.fast_raw_client.chat.completions.create(
                     model=self.model_fast,
                     messages=[
-                        {"role": "system", "content": "You are a concise triage classifier. Output only YES: reason or NO: reason."},
+                        {
+                            "role": "system",
+                            "content": "You are a concise triage classifier. Output only YES: reason or NO: reason.",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     max_tokens=35,

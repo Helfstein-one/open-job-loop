@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+
 """
 Typer command-line interface for open-job-loop.
 
@@ -21,28 +22,28 @@ from typing import Any, Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.prompt import Prompt
+from rich.table import Table
 
+from src.application.use_cases.auto_apply import AutoApplyWorker
 from src.application.use_cases.harness import LocalLoopGuard
+from src.application.use_cases.onboard import ProfilerAgent
 from src.application.use_cases.pipeline import JobPipeline
+from src.application.use_cases.profile import ProfileManager
 from src.application.use_cases.truncator import TextTruncator
-from src.infrastructure.adapters.repository import JobRepository
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.domain.models import CandidateProfile
 from src.infrastructure.adapters.cascade_evaluator import (
-    CascadeJobEvaluator,
-    DEFAULT_FAST_MODEL,
-    DEFAULT_DEEP_MODEL,
     DEEP_HIGH_PRECISION_MODEL,
+    DEFAULT_DEEP_MODEL,
+    DEFAULT_FAST_MODEL,
+    CascadeJobEvaluator,
 )
+from src.infrastructure.adapters.database import setup_duckdb_logging
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
 from src.infrastructure.adapters.mcp_client import BaseJobIngestionClient, McpJobClient
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
-from src.infrastructure.adapters.open_apis_ingestion import OpenApisJobClient, HybridJobClient
-from src.domain.models import CandidateProfile
-from src.application.use_cases.profile import ProfileManager
-from src.application.use_cases.auto_apply import AutoApplyWorker
-from src.application.use_cases.onboard import ProfilerAgent
-from src.infrastructure.adapters.database import setup_duckdb_logging
+from src.infrastructure.adapters.open_apis_ingestion import HybridJobClient, OpenApisJobClient
+from src.infrastructure.adapters.repository import JobRepository
 from src.presentation.ui_banner import DEFAULT_VERSION, render_banner
 from src.presentation.ui_console import create_pipeline_ui
 
@@ -73,6 +74,7 @@ def run_sync(coro: Any) -> Any:
 
     if loop is not None and loop.is_running():
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             return executor.submit(asyncio.run, coro).result()
     return asyncio.run(coro)
@@ -129,6 +131,7 @@ BUILTIN_MOCK_JOBS = [
 # CLI Commands
 # ==============================================================================
 
+
 @app.command(name="banner")
 def banner_cmd(
     plain: bool = typer.Option(
@@ -159,6 +162,7 @@ def stats_cmd(
     """
     Display summary statistics and triage fit rates from the DuckDB repository.
     """
+
     async def _fetch_and_render() -> None:
         repo = JobRepository(db_path=db_path)
         try:
@@ -240,8 +244,10 @@ def login_cmd(
     """
     Open an interactive browser window to log into LinkedIn and save authenticated session cookies.
     """
+
     async def _login() -> None:
         from playwright.async_api import async_playwright
+
         console.print(
             Panel(
                 "[bold cyan]Iniciando navegador para login no LinkedIn...[/]\n\n"
@@ -258,7 +264,9 @@ def login_cmd(
             page = await context.new_page()
             await page.goto("https://www.linkedin.com/login")
 
-            await asyncio.to_thread(input, "\n👉 Pressione ENTER aqui após concluir o login no navegador: ")
+            await asyncio.to_thread(
+                input, "\n👉 Pressione ENTER aqui após concluir o login no navegador: "
+            )
 
             Path(state_file).parent.mkdir(parents=True, exist_ok=True)
             await context.storage_state(path=state_file)
@@ -327,6 +335,7 @@ def onboard_cmd(
     Onboard a LinkedIn profile: analyze background, formulate target job profile,
     conduct adaptive grill-me interview, and compile profile.yaml into DuckDB VSS.
     """
+
     async def _onboard() -> None:
         agent = ProfilerAgent(model=model, db_path=db_path, mock_mode=mock)
         raw_text = ""
@@ -349,13 +358,17 @@ def onboard_cmd(
                 if choice.endswith(".pdf"):
                     raw_text = agent.extract_from_pdf(choice)
                 elif choice.startswith("http"):
-                    with console.status("[cyan]Acessando LinkedIn e extraindo dados do perfil...[/]"):
+                    with console.status(
+                        "[cyan]Acessando LinkedIn e extraindo dados do perfil...[/]"
+                    ):
                         raw_text = await agent.extract_from_url(choice, state_file=state_file)
                 else:
                     raw_text = ""
 
         # 2. Analysis & Target Job Profile Formulation
-        with console.status("[cyan]Profiler Agent analisando perfil e formulando Perfil Alvo...[/]"):
+        with console.status(
+            "[cyan]Profiler Agent analisando perfil e formulando Perfil Alvo...[/]"
+        ):
             analysis = await agent.analyze_profile(raw_text)
 
         cand = analysis.get("candidate", {})
@@ -378,10 +391,14 @@ def onboard_cmd(
         )
 
         # 3. Entrevista Adaptativa (Grill-Me)
-        console.print("\n[bold yellow]🎙️  Iniciando Entrevista Adaptativa (Grill-Me) para Calibração de Preferências[/]")
-        console.print("[dim]Pressione ENTER para aceitar a sugestão do robô ou digite sua resposta personalizada.[/]\n")
+        console.print(
+            "\n[bold yellow]🎙️  Iniciando Entrevista Adaptativa (Grill-Me) para Calibração de Preferências[/]"
+        )
+        console.print(
+            "[dim]Pressione ENTER para aceitar a sugestão do robô ou digite sua resposta personalizada.[/]\n"
+        )
 
-        answers: Dict[str, str] = {}
+        answers: dict[str, str] = {}
         questions = target.get("suggested_questions", [])
 
         for idx, q_item in enumerate(questions, 1):
@@ -394,7 +411,9 @@ def onboard_cmd(
                 console.print(f"[bold cyan][{idx}/{len(questions)}][/] {q_text}")
                 console.print(f"👉 [green]Resposta adotada:[/] {default_val}\n")
             else:
-                user_ans = Prompt.ask(f"[bold cyan][{idx}/{len(questions)}][/] {q_text}", default=default_val)
+                user_ans = Prompt.ask(
+                    f"[bold cyan][{idx}/{len(questions)}][/] {q_text}", default=default_val
+                )
                 answers[q_id] = user_ans
 
         # 4. Compilação e Persistência
@@ -455,6 +474,7 @@ def profile_sync_cmd(
     """
     Sync and vectorize candidate profile into DuckDB VSS for RAG form filling.
     """
+
     async def _sync() -> None:
         manager = ProfileManager(db_path=db_path, mock_mode=mock)
         with console.status(f"[cyan]Vectorizing profile from '{file}' into DuckDB VSS...[/]"):
@@ -486,7 +506,9 @@ def profile_show_cmd(
     manager = ProfileManager(db_path=db_path)
     chunks = manager.list_chunks()
     if not chunks:
-        console.print(f"[yellow]No profile chunks found in '{db_path}'. Run 'jobloop profile sync' first.[/]")
+        console.print(
+            f"[yellow]No profile chunks found in '{db_path}'. Run 'jobloop profile sync' first.[/]"
+        )
         return
 
     table = Table(
@@ -523,9 +545,12 @@ def profile_ask_cmd(
     """
     Query candidate profile RAG and test synthesized form answers.
     """
+
     async def _ask() -> None:
         manager = ProfileManager(db_path=db_path, mock_mode=mock)
-        with console.status(f"[cyan]Searching profile and synthesizing answer for: '{question}'...[/]"):
+        with console.status(
+            f"[cyan]Searching profile and synthesizing answer for: '{question}'...[/]"
+        ):
             matches = await manager.search_profile(question, limit=2)
             answer = await manager.synthesize_answer(question)
 
@@ -763,7 +788,9 @@ def run_cmd(
     else:
         effective_fast = model_fast
 
-    display_model = f"Cascade ({effective_fast} -> {effective_deep})" if not no_cascade else effective_deep
+    display_model = (
+        f"Cascade ({effective_fast} -> {effective_deep})" if not no_cascade else effective_deep
+    )
 
     if not headless and console.is_terminal:
         render_banner(console=console, model=display_model, db_path=db_path)
@@ -852,7 +879,9 @@ def run_cmd(
                         "easy_apply": easy_apply,
                     },
                 )
-                mcp_client = HybridJobClient(open_client=open_c, linkedin_client=li_c, enable_linkedin=True)
+                mcp_client = HybridJobClient(
+                    open_client=open_c, linkedin_client=li_c, enable_linkedin=True
+                )
 
             await mcp_client.connect()
 
@@ -994,6 +1023,7 @@ def batch_run_cmd(
     Execute autonomous multi-query international batch rotation (US/UK/EU).
     Rotates queries to discover up to 1000+ jobs without hitting pagination limits.
     """
+
     async def _execute_batch() -> int:
         setup_duckdb_logging(db_path=db_path)
         console.print(
@@ -1038,7 +1068,9 @@ def batch_run_cmd(
             )
 
             if source == "open":
-                ingestion_client: BaseJobIngestionClient = OpenApisJobClient(keywords=kw, location=loc)
+                ingestion_client: BaseJobIngestionClient = OpenApisJobClient(
+                    keywords=kw, location=loc
+                )
             elif source == "linkedin":
                 ingestion_client = McpJobClient(
                     command="uvx",
@@ -1062,7 +1094,9 @@ def batch_run_cmd(
                         "easy_apply": True,
                     },
                 )
-                ingestion_client = HybridJobClient(open_client=open_c, linkedin_client=li_c, enable_linkedin=True)
+                ingestion_client = HybridJobClient(
+                    open_client=open_c, linkedin_client=li_c, enable_linkedin=True
+                )
 
             await ingestion_client.connect()
 
@@ -1098,7 +1132,9 @@ def batch_run_cmd(
                 await repo.close()
 
             if apply and cycle_shortlisted > 0:
-                console.print("  [bold green]Triggering autonomous Auto-Apply for shortlisted jobs...[/]")
+                console.print(
+                    "  [bold green]Triggering autonomous Auto-Apply for shortlisted jobs...[/]"
+                )
                 worker = AutoApplyWorker(
                     db_path=db_path,
                     headless=True,
@@ -1147,10 +1183,11 @@ def audit_cmd(
     """
     Display audit log of submitted job applications and filled form fields from DuckDB.
     """
-    import duckdb
     import json
     import shutil
     import tempfile
+
+    import duckdb
 
     if not Path(db_path).exists():
         console.print(f"[yellow]Banco de dados '{db_path}' não encontrado.[/yellow]")
@@ -1175,7 +1212,9 @@ def audit_cmd(
             "SELECT count(*) FROM information_schema.tables WHERE table_name = 'application_audit_log'"
         ).fetchone()[0]
         if not exists:
-            console.print("[yellow]Tabela application_audit_log ainda não possui registros.[/yellow]")
+            console.print(
+                "[yellow]Tabela application_audit_log ainda não possui registros.[/yellow]"
+            )
             return
 
         rows = conn.execute(
@@ -1189,7 +1228,9 @@ def audit_cmd(
         ).fetchall()
 
         if not rows:
-            console.print("[yellow]Nenhuma candidatura registrada na auditoria até o momento.[/yellow]")
+            console.print(
+                "[yellow]Nenhuma candidatura registrada na auditoria até o momento.[/yellow]"
+            )
             return
 
         table = Table(title="📜 Application Audit Log (DuckDB)", border_style="cyan")
@@ -1205,7 +1246,9 @@ def audit_cmd(
             dt_str = str(applied_at)[:19] if applied_at else ""
             summary_parts = []
             try:
-                fields_list = json.loads(fields_raw) if isinstance(fields_raw, str) else (fields_raw or [])
+                fields_list = (
+                    json.loads(fields_raw) if isinstance(fields_raw, str) else (fields_raw or [])
+                )
                 for f in fields_list:
                     if isinstance(f, dict) and "question" in f and "answer" in f:
                         summary_parts.append(f"{f['question'][:25]}: [green]{f['answer'][:20]}[/]")
@@ -1213,7 +1256,14 @@ def audit_cmd(
                 pass
             fields_str = " | ".join(summary_parts[:3]) or (lgs or "")[:60]
             st_color = "green" if "APPLIED" in st else "red"
-            table.add_row(dt_str, (comp or "")[:18], (title or "")[:28], chan or "", f"[{st_color}]{st}[/]", fields_str)
+            table.add_row(
+                dt_str,
+                (comp or "")[:18],
+                (title or "")[:28],
+                chan or "",
+                f"[{st_color}]{st}[/]",
+                fields_str,
+            )
 
         console.print(table)
     finally:
@@ -1257,9 +1307,10 @@ def logs_cmd(
     """
     Display system and worker execution logs from DuckDB execution_logs table.
     """
-    import duckdb
     import shutil
     import tempfile
+
+    import duckdb
 
     if not Path(db_path).exists():
         console.print(f"[yellow]Banco de dados '{db_path}' não encontrado.[/yellow]")
@@ -1339,6 +1390,7 @@ def logs_cmd(
 # ==============================================================================
 # Script Entry Point
 # ==============================================================================
+
 
 def main() -> None:
     """Console script entrypoint for open-job-loop and jobloop."""

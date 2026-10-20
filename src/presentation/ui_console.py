@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Rich live console layout and telemetry dashboard for open-job-loop.
 
@@ -14,10 +15,9 @@ Provides:
 import abc
 import time
 from dataclasses import dataclass, field
-from datetime import timezone, datetime
+from datetime import datetime, timezone
 from types import TracebackType
 from typing import Any
-from typing_extensions import Self
 
 from rich.align import Align
 from rich.console import Console, Group
@@ -26,6 +26,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from typing_extensions import Self
 
 from src.domain.models import JobPosting, JobStatus, MatchEvaluation
 
@@ -54,6 +55,7 @@ STAGE_ICONS = {
 @dataclass
 class UIState:
     """Telemetry state container for the terminal UI dashboard."""
+
     keywords: str = "Python Software Engineer"
     location: str = "Remote"
     limit: int = 10
@@ -100,6 +102,7 @@ class UIState:
 # Panel Builders
 # ==============================================================================
 
+
 def build_header_panel(state: UIState) -> Panel:
     """Build the top session status and configuration panel."""
     elapsed = int(time.monotonic() - state.start_time)
@@ -139,7 +142,11 @@ def build_pipeline_panel(state: UIState) -> Panel:
     for idx, name in enumerate(STAGE_NAMES, start=1):
         status_key = state.stage_statuses.get(idx, "PENDING")
         icon = STAGE_ICONS.get(status_key, "[dim]•[/]")
-        name_style = "bold white" if status_key == "RUNNING" else ("white" if status_key == "DONE" else "dim")
+        name_style = (
+            "bold white"
+            if status_key == "RUNNING"
+            else ("white" if status_key == "DONE" else "dim")
+        )
         table.add_row(icon, f"[{name_style}]{name}[/]")
 
     return Panel(
@@ -170,7 +177,11 @@ def build_current_job_panel(state: UIState) -> Panel:
 
     # Status & Tokens
     st_val = state.current_job_status or "INGESTED"
-    st_style = "bold green" if st_val == "SHORTLISTED" else ("dim red" if st_val == "DISCARDED" else "bold yellow")
+    st_style = (
+        "bold green"
+        if st_val == "SHORTLISTED"
+        else ("dim red" if st_val == "DISCARDED" else "bold yellow")
+    )
     tokens_str = f"{state.current_tokens:,}" if state.current_tokens else "N/A"
     lines.append(
         Text.from_markup(f"Status: [{st_style}]{st_val}[/] | Tokens: [cyan]{tokens_str}[/]")
@@ -178,7 +189,9 @@ def build_current_job_panel(state: UIState) -> Panel:
 
     # Fit Score Badge
     if state.current_fit_score is not None:
-        rec = state.current_recommendation or ("SHORTLIST" if state.current_fit_score >= state.threshold else "DISCARD")
+        rec = state.current_recommendation or (
+            "SHORTLIST" if state.current_fit_score >= state.threshold else "DISCARD"
+        )
         badge_style = "bold green" if rec == "SHORTLIST" else "bold red"
         lines.append(
             Text.from_markup(
@@ -200,7 +213,9 @@ def build_current_job_panel(state: UIState) -> Panel:
 
     # Reasoning excerpt
     if state.current_reasoning:
-        snippet = state.current_reasoning[:120] + ("..." if len(state.current_reasoning) > 120 else "")
+        snippet = state.current_reasoning[:120] + (
+            "..." if len(state.current_reasoning) > 120 else ""
+        )
         lines.append(Text.from_markup(f"[italic dim]Reason: {snippet}[/]"))
 
     return Panel(
@@ -268,6 +283,7 @@ def build_layout(state: UIState) -> Layout:
 # ==============================================================================
 # UI Manager Interfaces & Implementations
 # ==============================================================================
+
 
 class BasePipelineUI(abc.ABC):
     """Abstract base class for pipeline UI managers."""
@@ -352,7 +368,11 @@ class BasePipelineUI(abc.ABC):
 
         table.add_section()
         shortlist_pct = f"{(shortlisted / triaged * 100):.1f}%" if triaged > 0 else "N/A"
-        table.add_row("[bold green]Match Fit Rate[/]", f"[bold green]{shortlisted}/{triaged}[/]", shortlist_pct)
+        table.add_row(
+            "[bold green]Match Fit Rate[/]",
+            f"[bold green]{shortlisted}/{triaged}[/]",
+            shortlist_pct,
+        )
 
         self.console.print(table)
 
@@ -420,7 +440,9 @@ class LivePipelineUI(BasePipelineUI):
         self.state.current_job_title = job.title
         self.state.current_job_company = job.company
         self.state.current_job_location = job.location
-        self.state.current_job_status = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+        self.state.current_job_status = (
+            job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+        )
         self.state.current_fit_score = job.fit_score
         self.state.current_recommendation = job.recommendation.value if job.recommendation else None
         self.state.current_tokens = job.token_count
@@ -441,13 +463,17 @@ class LivePipelineUI(BasePipelineUI):
     def on_job_completed(self, job: JobPosting, metrics: dict[str, int]) -> None:
         self.state.metrics.update(metrics)
         self.state.stage_statuses[5] = "DONE"
-        self.state.current_job_status = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+        self.state.current_job_status = (
+            job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+        )
         self._refresh()
 
     def on_job_skipped(self, reason: str, job: JobPosting | None = None) -> None:
         self.state.status_message = f"Skipped: {reason}"
         if job:
-            self.state.current_job_status = job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+            self.state.current_job_status = (
+                job.status.value if isinstance(job.status, JobStatus) else str(job.status)
+            )
         self._refresh()
 
     def on_metrics_update(self, metrics: dict[str, int]) -> None:
@@ -485,7 +511,9 @@ class HeadlessPipelineUI(BasePipelineUI):
         now = datetime.now(timezone.utc).strftime("%H:%M:%S")
         det = f" - {detail}" if detail else ""
         if status in ("RUNNING", "DONE", "TIMEOUT", "ERROR"):
-            self.console.print(f"[dim][{now}][/] [cyan][STAGE {stage_idx}][/] {stage_name}: {status}{det}")
+            self.console.print(
+                f"[dim][{now}][/] [cyan][STAGE {stage_idx}][/] {stage_name}: {status}{det}"
+            )
 
     def on_job_start(self, job: JobPosting, iteration: int, max_iterations: int) -> None:
         now = datetime.now(timezone.utc).strftime("%H:%M:%S")

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Local LLM client factory wrapping AsyncOpenAI with Instructor in JSON mode.
 """

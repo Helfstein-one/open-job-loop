@@ -24,7 +24,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from src.presentation.cli import app
 from src.application.use_cases.harness import (
     CircuitOpenError,
     CircuitState,
@@ -33,9 +32,6 @@ from src.application.use_cases.harness import (
 )
 from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
 from src.application.use_cases.truncator import TextTruncator
-from src.infrastructure.adapters.repository import JobRepository
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
@@ -43,6 +39,10 @@ from src.domain.models import (
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.repository import JobRepository
+from src.presentation.cli import app
 
 runner = CliRunner()
 
@@ -300,23 +300,36 @@ class TestTier4CliModes:
 
     def test_cli_run_mock_headless(self, tmp_path: Path):
         db_path = str(tmp_path / "cli_headless.duckdb")
-        result = runner.invoke(app, [
-            "run",
-            "--mock",
-            "--headless",
-            "--limit", "3",
-            "--db", db_path,
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--mock",
+                "--headless",
+                "--limit",
+                "3",
+                "--db",
+                db_path,
+            ],
+        )
         assert result.exit_code == 0
-        assert "autonomous execution summary" in result.stdout or "Execution Completed" in result.stdout
+        assert (
+            "autonomous execution summary" in result.stdout
+            or "Execution Completed" in result.stdout
+        )
 
     def test_cli_run_mock_default_terminal_mode(self, tmp_path: Path):
         db_path = str(tmp_path / "cli_terminal.duckdb")
-        result = runner.invoke(app, [
-            "run",
-            "--mock",
-            "--no-headless",
-            "--limit", "2",
-            "--db", db_path,
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--mock",
+                "--no-headless",
+                "--limit",
+                "2",
+                "--db",
+                db_path,
+            ],
+        )
         assert result.exit_code == 0

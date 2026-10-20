@@ -1,13 +1,15 @@
-import os
-import math
 import hashlib
 import logging
+import math
+import os
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
+
 import duckdb
-from src.application.ports.user_profile import UserProfilePort
 import yaml
 from openai import AsyncOpenAI
+
+from src.application.ports.user_profile import UserProfilePort
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,9 @@ def compute_mock_embedding(text: str, dim: int = 768) -> List[float]:
     Maps word hashes into a fixed-dimension vector with L2 normalization.
     """
     vec = [0.001] * dim
-    words = text.lower().replace("?", " ").replace(",", " ").replace(".", " ").replace(":", " ").split()
+    words = (
+        text.lower().replace("?", " ").replace(",", " ").replace(".", " ").replace(":", " ").split()
+    )
     for w in words:
         if len(w) < 2:
             continue
@@ -149,7 +153,9 @@ class ProfileManager(UserProfilePort):
                     skill_lines.append(f"{group.replace('_', ' ').title()}: {', '.join(items)}")
                 else:
                     skill_lines.append(f"{group}: {items}")
-            chunks.append(("technical_skills", "Candidate Technical Skills: " + " | ".join(skill_lines)))
+            chunks.append(
+                ("technical_skills", "Candidate Technical Skills: " + " | ".join(skill_lines))
+            )
 
         experiences = data.get("experiences", [])
         if isinstance(experiences, list):
@@ -210,12 +216,15 @@ class ProfileManager(UserProfilePort):
         query_emb = await self.get_embedding(query)
         conn = self._get_connection()
 
-        res = conn.execute("""
+        res = conn.execute(
+            """
             SELECT category, content, list_cosine_distance(embedding, ?::FLOAT[768]) as dist
             FROM user_profile
             ORDER BY dist ASC
             LIMIT ?;
-        """, (query_emb, limit)).fetchall()
+        """,
+            (query_emb, limit),
+        ).fetchall()
         conn.close()
 
         results = []
@@ -242,19 +251,26 @@ class ProfileManager(UserProfilePort):
         data = {}
         try:
             conn = self._get_connection()
-            row = conn.execute("SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;").fetchone()
+            row = conn.execute(
+                "SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;"
+            ).fetchone()
             conn.close()
             if row and row[0]:
                 text = row[0]
                 import re
+
                 m_name = re.search(r"Candidate Name:\s*([^.]+)\.", text)
-                if m_name: data["name"] = m_name.group(1).strip()
+                if m_name:
+                    data["name"] = m_name.group(1).strip()
                 m_email = re.search(r"Email:\s*([^\s]+)", text)
-                if m_email: data["email"] = m_email.group(1).rstrip(".").strip()
+                if m_email:
+                    data["email"] = m_email.group(1).rstrip(".").strip()
                 m_phone = re.search(r"Phone:\s*([^.]+)\.", text)
-                if m_phone: data["phone"] = m_phone.group(1).strip()
+                if m_phone:
+                    data["phone"] = m_phone.group(1).strip()
                 m_linkedin = re.search(r"LinkedIn:\s*([^\s]+)", text)
-                if m_linkedin: data["linkedin"] = m_linkedin.group(1).rstrip(".").strip()
+                if m_linkedin:
+                    data["linkedin"] = m_linkedin.group(1).rstrip(".").strip()
         except Exception:
             pass
         self._cached_bio_data = data
@@ -272,7 +288,10 @@ class ProfileManager(UserProfilePort):
         # Resolução determinística imediata para dados de contato
         q_lower = question.lower()
         bio_info = self._get_cached_bio()
-        if any(w in q_lower for w in ["nome completo", "full name", "first name", "seu nome", "candidate name"]):
+        if any(
+            w in q_lower
+            for w in ["nome completo", "full name", "first name", "seu nome", "candidate name"]
+        ):
             if bio_info.get("name"):
                 return bio_info["name"], 1.0
 
@@ -299,7 +318,9 @@ class ProfileManager(UserProfilePort):
         bio_prefix = ""
         try:
             conn = self._get_connection()
-            row = conn.execute("SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;").fetchone()
+            row = conn.execute(
+                "SELECT content FROM user_profile WHERE category = 'personal_bio' LIMIT 1;"
+            ).fetchone()
             conn.close()
             if row and row[0]:
                 bio_prefix = f"[personal_bio] {row[0]}\n"
@@ -350,7 +371,7 @@ class ProfileManager(UserProfilePort):
                 temperature=0.0,
                 max_tokens=60,
             )
-            answer = resp.choices[0].message.content.strip().strip('"\'`')
+            answer = resp.choices[0].message.content.strip().strip("\"'`")
             return answer, confidence
         except Exception as e:
             logger.warning(f"Erro ao sintetizar resposta com LLM ({e}). Usando contexto direto.")
@@ -379,7 +400,9 @@ class ProfileManager(UserProfilePort):
     def list_chunks(self) -> List[Dict]:
         """Lista os chunks atualmente armazenados no banco."""
         conn = self._get_connection()
-        res = conn.execute("SELECT category, content FROM user_profile ORDER BY category").fetchall()
+        res = conn.execute(
+            "SELECT category, content FROM user_profile ORDER BY category"
+        ).fetchall()
         conn.close()
         return [{"category": r[0], "content": r[1]} for r in res]
 

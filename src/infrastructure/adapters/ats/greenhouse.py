@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Greenhouse ATS Adapter.
 Supports boards.greenhouse.io, job-boards.greenhouse.io, and embedded Greenhouse boards.
@@ -6,14 +7,13 @@ Supports boards.greenhouse.io, job-boards.greenhouse.io, and embedded Greenhouse
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from src.domain.models import ApplicationChannel
-from src.infrastructure.adapters.ats.base import BaseATSAdapter, ApplicationResult
 from src.application.use_cases.active_learning import ActiveLearningService
+from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.base import ApplicationResult, BaseATSAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -49,21 +49,33 @@ class GreenhouseAdapter(BaseATSAdapter):
         logger.info(f"Navegando para vaga Greenhouse: {url}")
 
         try:
-            if url and not url.startswith("mock://") and (page.url != url or url.startswith("file://")):
+            if (
+                url
+                and not url.startswith("mock://")
+                and (page.url != url or url.startswith("file://"))
+            ):
                 await page.goto(url, timeout=30000)
                 await asyncio.sleep(0.5)
 
             # Ensure we are scrolled to the application form
-            app_form = page.locator("#application, #application_form, #app_body, form#new_job_application").first
+            app_form = page.locator(
+                "#application, #application_form, #app_body, form#new_job_application"
+            ).first
             if await app_form.count() > 0:
                 await app_form.scroll_into_view_if_needed()
 
             # 1. First & Last Name
-            first_name_input = page.locator("#first_name, input[name='job_application[first_name]']").first
-            last_name_input = page.locator("#last_name, input[name='job_application[last_name]']").first
+            first_name_input = page.locator(
+                "#first_name, input[name='job_application[first_name]']"
+            ).first
+            last_name_input = page.locator(
+                "#last_name, input[name='job_application[last_name]']"
+            ).first
             full_name_input = page.locator("#name, input[name='job_application[name]']").first
 
-            candidate_name = await active_learning.get_or_learn_answer("Qual é o seu nome completo?", job_context)
+            candidate_name = await active_learning.get_or_learn_answer(
+                "Qual é o seu nome completo?", job_context
+            )
             parts = candidate_name.split(maxsplit=1)
             first_name = parts[0]
             last_name = parts[1] if len(parts) > 1 else ""
@@ -78,7 +90,11 @@ class GreenhouseAdapter(BaseATSAdapter):
                 fields_filled += 1
                 logs.append(f"Preenchido Last Name: {last_name}")
 
-            if await full_name_input.count() > 0 and await full_name_input.is_visible() and await first_name_input.count() == 0:
+            if (
+                await full_name_input.count() > 0
+                and await full_name_input.is_visible()
+                and await first_name_input.count() == 0
+            ):
                 await full_name_input.fill(candidate_name)
                 fields_filled += 1
                 logs.append(f"Preenchido Name: {candidate_name}")
@@ -86,7 +102,9 @@ class GreenhouseAdapter(BaseATSAdapter):
             # 2. Email
             email_input = page.locator("#email, input[name='job_application[email]']").first
             if await email_input.count() > 0 and await email_input.is_visible():
-                email_val = await active_learning.get_or_learn_answer("Qual é o seu e-mail?", job_context)
+                email_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu e-mail?", job_context
+                )
                 await email_input.fill(email_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Email: {email_val}")
@@ -94,7 +112,9 @@ class GreenhouseAdapter(BaseATSAdapter):
             # 3. Phone
             phone_input = page.locator("#phone, input[name='job_application[phone]']").first
             if await phone_input.count() > 0 and await phone_input.is_visible():
-                phone_val = await active_learning.get_or_learn_answer("Qual é o seu telefone / WhatsApp?", job_context)
+                phone_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu telefone / WhatsApp?", job_context
+                )
                 await phone_input.fill(phone_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Phone: {phone_val}")
@@ -123,7 +143,10 @@ class GreenhouseAdapter(BaseATSAdapter):
 
                 # Skip standard fields already filled
                 lbl_lower = label_text.lower()
-                if any(x in lbl_lower for x in ["first name", "last name", "email", "phone", "resume", "cv"]):
+                if any(
+                    x in lbl_lower
+                    for x in ["first name", "last name", "email", "phone", "resume", "cv"]
+                ):
                     continue
 
                 input_el = field.locator("input[type='text'], input:not([type]), textarea").first
@@ -158,10 +181,16 @@ class GreenhouseAdapter(BaseATSAdapter):
                             pass
 
             # 6. Submission or Dry Run
-            submit_btn = page.locator("#submit_app, input[type='submit'], button[type='submit']").first
+            submit_btn = page.locator(
+                "#submit_app, input[type='submit'], button[type='submit']"
+            ).first
             if dry_run:
-                logs.append("Modo DRY-RUN ativado: formulário preenchido com sucesso sem submissão final.")
-                logger.info(f"DRY-RUN Greenhouse concluído para {job_context.get('title')}. Total campos: {fields_filled}")
+                logs.append(
+                    "Modo DRY-RUN ativado: formulário preenchido com sucesso sem submissão final."
+                )
+                logger.info(
+                    f"DRY-RUN Greenhouse concluído para {job_context.get('title')}. Total campos: {fields_filled}"
+                )
                 return ApplicationResult(
                     success=True,
                     channel=self.channel,

@@ -20,6 +20,7 @@ import sys
 
 import pytest
 
+from src.domain.models import JobStatus
 from src.infrastructure.adapters.mcp_client import (
     McpConnectionError,
     McpJobClient,
@@ -28,11 +29,11 @@ from src.infrastructure.adapters.mcp_client import (
     parse_job_payload,
 )
 from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
-from src.domain.models import JobStatus
 
 # ==============================================================================
 # Helper to get child PIDs for leakage verification
 # ==============================================================================
+
 
 def get_child_pids() -> list[int]:
     """Retrieve child process PIDs of current process on macOS / Unix."""
@@ -51,6 +52,7 @@ def get_child_pids() -> list[int]:
 # ==============================================================================
 # 1. Stdio Connection Hangs & Process Leakage
 # ==============================================================================
+
 
 class TestStdioConnectionHangs:
     @pytest.mark.asyncio
@@ -117,6 +119,7 @@ if __name__ == '__main__':
 # ==============================================================================
 # 2. Abrupt Subprocess Terminations (SIGTERM & SIGKILL)
 # ==============================================================================
+
 
 class TestAbruptSubprocessTerminations:
     @pytest.mark.asyncio
@@ -209,6 +212,7 @@ if __name__ == '__main__':
 # 3. High Volume & Large Payload Transfers
 # ==============================================================================
 
+
 class TestLargePayloadTransfers:
     @pytest.mark.asyncio
     async def test_stdio_1000_jobs_stream_without_pipe_deadlock(self):
@@ -297,6 +301,7 @@ if __name__ == '__main__':
 # 4. Adversarial Payloads & Edge Cases
 # ==============================================================================
 
+
 class TestAdversarialPayloads:
     def test_unicode_special_characters_and_null_bytes(self):
         """
@@ -318,10 +323,14 @@ class TestAdversarialPayloads:
         Verify that whitespace-only fields are treated as empty and rejected.
         """
         with pytest.raises(McpPayloadError, match="title"):
-            parse_job_payload({"title": "   \t\n  ", "company": "Acme", "description": "Valid desc"})
+            parse_job_payload(
+                {"title": "   \t\n  ", "company": "Acme", "description": "Valid desc"}
+            )
 
         with pytest.raises(McpPayloadError, match="company"):
-            parse_job_payload({"title": "Valid title", "company": "   ", "description": "Valid desc"})
+            parse_job_payload(
+                {"title": "Valid title", "company": "   ", "description": "Valid desc"}
+            )
 
         with pytest.raises(McpPayloadError, match="raw_description"):
             parse_job_payload({"title": "Valid title", "company": "Acme", "description": "    "})
@@ -340,6 +349,7 @@ class TestAdversarialPayloads:
 # ==============================================================================
 # 5. Mock MCP Client Failure Modes & Concurrency
 # ==============================================================================
+
 
 class TestMockMcpClientStress:
     class CustomTestException(Exception):
@@ -418,8 +428,7 @@ class TestMockMcpClientStress:
         Verify cyclic loop pagination with high iteration volume.
         """
         jobs = [
-            {"title": f"Job {i}", "company": "Co", "description": f"Desc {i}"}
-            for i in range(3)
+            {"title": f"Job {i}", "company": "Co", "description": f"Desc {i}"} for i in range(3)
         ]
         mock = MockMcpJobClient(jobs=jobs, mode="loop")
         await mock.connect()
@@ -440,8 +449,7 @@ class TestMockMcpClientStress:
         tasks fetch from the mock client.
         """
         jobs = [
-            {"title": f"Job {i}", "company": "Co", "description": f"Desc {i}"}
-            for i in range(100)
+            {"title": f"Job {i}", "company": "Co", "description": f"Desc {i}"} for i in range(100)
         ]
         mock = MockMcpJobClient(jobs=jobs, mode="sequential", latency_seconds=0.005)
         await mock.connect()

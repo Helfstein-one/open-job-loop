@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from src.application.use_cases.onboard import ProfilerAgent, TargetJobProfile
+
+import pytest
+
+from src.application.use_cases.onboard import ProfilerAgent
 
 
 @pytest.fixture

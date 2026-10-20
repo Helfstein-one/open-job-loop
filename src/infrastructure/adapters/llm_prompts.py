@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Prompt templates, delimiter wrappers, and security instructions for local LLM evaluation.
 """

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 from typing import Any, Dict, Optional
+
 from src.domain.models import ApplicationChannel
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Startup ASCII art banner and Rich Panel rendering for open-job-loop.
 
@@ -33,6 +34,7 @@ DEFAULT_DB = "data/open_job_loop.duckdb"
 # ==============================================================================
 # Banner Rendering Functions
 # ==============================================================================
+
 
 def get_banner_text(version: str = DEFAULT_VERSION) -> str:
     """

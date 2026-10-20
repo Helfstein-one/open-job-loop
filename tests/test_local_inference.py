@@ -14,15 +14,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
-from src.infrastructure.adapters.llm_prompts import build_evaluation_messages
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.llm_prompts import build_evaluation_messages
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 
 FIXTURE_PATH = Path("fixtures/golden_jobs.json")
 
@@ -99,6 +99,7 @@ def golden_candidate_profile() -> CandidateProfile:
 # ==============================================================================
 # Offline Mock & Schema Verification Tests (Run reliably in CI without Ollama)
 # ==============================================================================
+
 
 class TestGoldenFixturesOffline:
     """Verify structure, partitioning, and schema compliance of golden_jobs.json."""
@@ -199,6 +200,7 @@ class TestGoldenFixturesOffline:
 # Live Local Llama 3.2 Integration Tests (Requires running Ollama with llama3.2)
 # ==============================================================================
 
+
 @pytest.mark.skipif(
     not is_ollama_model_available(),
     reason="Local Ollama server (http://localhost:11434) or model llama3.2:3b not available",
@@ -238,9 +240,9 @@ class TestLiveLocalInference:
                 f"Job {job['id']} ('{job['title']}') failed match threshold: "
                 f"expected >= 70, got {result.fit_score}. Reasoning: {result.reasoning}"
             )
-            assert result.recommendation == Recommendation.SHORTLIST, (
-                f"Job {job['id']} recommendation expected SHORTLIST, got {result.recommendation}"
-            )
+            assert (
+                result.recommendation == Recommendation.SHORTLIST
+            ), f"Job {job['id']} recommendation expected SHORTLIST, got {result.recommendation}"
             assert len(result.reasoning) > 0
             assert isinstance(result.matched_skills, list)
             assert len(result.matched_skills) > 0
@@ -266,9 +268,9 @@ class TestLiveLocalInference:
                 f"Job {job['id']} ('{job['title']}') failed mismatch threshold: "
                 f"expected < 70, got {result.fit_score}. Reasoning: {result.reasoning}"
             )
-            assert result.recommendation == Recommendation.DISCARD, (
-                f"Job {job['id']} recommendation expected DISCARD, got {result.recommendation}"
-            )
+            assert (
+                result.recommendation == Recommendation.DISCARD
+            ), f"Job {job['id']} recommendation expected DISCARD, got {result.recommendation}"
             assert len(result.reasoning) > 0
 
     @pytest.mark.asyncio

@@ -1,8 +1,6 @@
 import pytest
-import os
-from pathlib import Path
-from src.application.use_cases.profile import ProfileManager, compute_mock_embedding
 
+from src.application.use_cases.profile import ProfileManager, compute_mock_embedding
 
 SAMPLE_PROFILE_YAML = """
 candidate:
@@ -61,6 +59,7 @@ def test_compute_mock_embedding_dimensions_and_normalization():
 def test_chunk_profile_categories(temp_profile_yaml):
     manager = ProfileManager(mock_mode=True)
     import yaml
+
     with open(temp_profile_yaml) as f:
         data = yaml.safe_load(f)
     chunks = manager.chunk_profile(data)

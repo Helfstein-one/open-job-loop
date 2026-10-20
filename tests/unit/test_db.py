@@ -21,14 +21,14 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from src.infrastructure.adapters.database import DatabaseManager
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 from src.domain.models import (
     JobPosting,
     JobStatus,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.database import DatabaseManager
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def create_sample_job(
     raw_desc: str = "We are seeking a Python systems engineer with DuckDB experience.",
     title: str = "Python Systems Engineer",
     company: str = "Acme Corp",
-    status: JobStatus = JobStatus.INGESTED
+    status: JobStatus = JobStatus.INGESTED,
 ) -> JobPosting:
     """Helper to instantiate a valid JobPosting entity."""
     content_hash = compute_job_hash(raw_desc, title=title, company=company)
@@ -200,7 +200,7 @@ async def test_status_transitions_lifecycle(repo_memory: JobRepository) -> None:
         recommendation=Recommendation.SHORTLIST,
         matched_skills=["Python", "DuckDB", "AsyncIO"],
         missing_skills=[],
-        reasoning="Exemplary fit for backend pipeline role."
+        reasoning="Exemplary fit for backend pipeline role.",
     )
     job.status = JobStatus.TRIAGED
     job.fit_score = 90
@@ -236,7 +236,7 @@ async def test_skipped_timeout_status_recording(repo_memory: JobRepository) -> N
     updated = await repo_memory.update_status(
         job_id="timeout-job-1",
         status=JobStatus.SKIPPED_TIMEOUT,
-        error_message="Inference timed out after 15.0 seconds"
+        error_message="Inference timed out after 15.0 seconds",
     )
     assert updated is True
 
@@ -292,6 +292,7 @@ async def test_streaming_iteration_bounded_memory(repo_memory: JobRepository) ->
 @pytest.mark.asyncio
 async def test_concurrent_distinct_writes(repo_memory: JobRepository) -> None:
     """Asserts concurrent tasks can write distinct jobs without lock contention errors."""
+
     async def insert_worker(idx: int) -> bool:
         j = create_sample_job(f"concurrent-{idx}", raw_desc=f"Desc {idx}")
         return await repo_memory.save_job(j)
@@ -304,12 +305,13 @@ async def test_concurrent_distinct_writes(repo_memory: JobRepository) -> None:
 
 @pytest.mark.asyncio
 async def test_concurrent_duplicate_writes_no_transaction_exception(
-    repo_memory: JobRepository
+    repo_memory: JobRepository,
 ) -> None:
     """
     Asserts concurrent tasks attempting to insert the exact same duplicate content_hash
     execute cleanly via the write lock without raising TransactionException.
     """
+
     async def duplicate_worker(idx: int) -> bool:
         j = create_sample_job(f"dup-{idx}", raw_desc="Identical collision payload")
         return await repo_memory.save_job(j)

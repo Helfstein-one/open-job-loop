@@ -29,16 +29,16 @@ from typer.testing import CliRunner
 from src.application.use_cases.harness import LocalLoopGuard
 from src.application.use_cases.pipeline import JobPipeline
 from src.application.use_cases.truncator import TextTruncator
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
-from src.infrastructure.adapters.mcp_client import McpPayloadError, parse_job_payload
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_client import McpPayloadError, parse_job_payload
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 from src.presentation.ui_console import (
     LivePipelineUI,
     UIState,
@@ -54,6 +54,7 @@ OPEN_JOBLOOP_BIN = VENV_BIN / "open-job-loop"
 # ==============================================================================
 # Helper Factories
 # ==============================================================================
+
 
 def make_candidate_profile() -> CandidateProfile:
     return CandidateProfile(
@@ -84,6 +85,7 @@ def generate_synthetic_job_dict(idx: int) -> dict[str, Any]:
 # ==============================================================================
 # 1. CLI Execution Stress: Signals, Backgrounding, Subshells
 # ==============================================================================
+
 
 class TestCLIExecutionStress:
     """Empirical verification of CLI process resilience under OS signals and subshells."""
@@ -129,6 +131,7 @@ class TestCLIExecutionStress:
         # DuckDB database file should not be locked or corrupted
         if Path(db_path).exists():
             import duckdb
+
             con = duckdb.connect(db_path)
             res = con.execute("SELECT count(*) FROM job_postings").fetchall()
             con.close()
@@ -167,6 +170,7 @@ class TestCLIExecutionStress:
 
         # Verify DB wrote records
         import duckdb
+
         con = duckdb.connect(db_path)
         count = con.execute("SELECT count(*) FROM job_postings").fetchone()[0]
         con.close()
@@ -240,8 +244,34 @@ class TestCLIExecutionStress:
         db1 = str(tmp_path / "parallel_1.duckdb")
         db2 = str(tmp_path / "parallel_2.duckdb")
 
-        cmd1 = [sys.executable, "-m", "src.cli", "run", "--mock", "--headless", "--limit", "1", "--timeout", "2.0", "--db", db1]
-        cmd2 = [sys.executable, "-m", "src.cli", "run", "--mock", "--headless", "--limit", "1", "--timeout", "2.0", "--db", db2]
+        cmd1 = [
+            sys.executable,
+            "-m",
+            "src.cli",
+            "run",
+            "--mock",
+            "--headless",
+            "--limit",
+            "1",
+            "--timeout",
+            "2.0",
+            "--db",
+            db1,
+        ]
+        cmd2 = [
+            sys.executable,
+            "-m",
+            "src.cli",
+            "run",
+            "--mock",
+            "--headless",
+            "--limit",
+            "1",
+            "--timeout",
+            "2.0",
+            "--db",
+            db2,
+        ]
 
         p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         p2 = subprocess.Popen(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -256,6 +286,7 @@ class TestCLIExecutionStress:
 # ==============================================================================
 # 2. Live CLI Rendering Stress: Unusual Terminal Dimensions
 # ==============================================================================
+
 
 class TestLiveUIRenderingStress:
     """Stress tests verifying Rich Live UI and Layout under extreme console geometries."""
@@ -379,6 +410,7 @@ class TestLiveUIRenderingStress:
 # 3. Fixture Replay Stress: Large JSON, Missing Fields, Invalid Types
 # ==============================================================================
 
+
 class TestFixtureReplayStress:
     """Stress tests verifying mock client and parser behavior on adversarial payloads."""
 
@@ -461,7 +493,9 @@ class TestFixtureReplayStress:
 
         # Raw description as list
         with pytest.raises(McpPayloadError):
-            parse_job_payload({"title": "Lead", "company": "ACME", "raw_description": ["not", "string"]})
+            parse_job_payload(
+                {"title": "Lead", "company": "ACME", "raw_description": ["not", "string"]}
+            )
 
         # Non-dict top level item
         with pytest.raises(McpPayloadError):
@@ -472,7 +506,7 @@ class TestFixtureReplayStress:
         Verify unparseable syntax in fixture file raises JSONDecodeError.
         """
         bad_json = tmp_path / "bad.json"
-        bad_json.write_text("{\"unclosed_key\": [1, 2,", encoding="utf-8")
+        bad_json.write_text('{"unclosed_key": [1, 2,', encoding="utf-8")
 
         with pytest.raises(json.JSONDecodeError):
             MockMcpJobClient(fixture_path=bad_json)
@@ -497,6 +531,7 @@ class TestFixtureReplayStress:
 # ==============================================================================
 # 4. Pipeline Sustained Load & Memory Stability Stress
 # ==============================================================================
+
 
 class TestPipelineSustainedLoadStress:
     """Stress tests verifying 5-stage pipeline throughput and O(1) memory bounds."""
@@ -576,7 +611,9 @@ class TestPipelineSustainedLoadStress:
 
         # Memory verification: Peak memory delta must stay strictly bounded (< 15 MB)
         peak_delta_mb = peak_mem / (1024 * 1024)
-        assert peak_delta_mb < 15.0, f"Peak memory grew to {peak_delta_mb:.2f} MB, exceeding O(1) bound"
+        assert (
+            peak_delta_mb < 15.0
+        ), f"Peak memory grew to {peak_delta_mb:.2f} MB, exceeding O(1) bound"
 
         # Verify DuckDB persisted all records immediately
         stats = await repo.get_stats()

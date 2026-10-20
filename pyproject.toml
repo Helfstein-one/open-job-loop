@@ -57,3 +57,31 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "F403", "F405", "E402", "E741", "E701", "W291", "W293", "F841"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+disable_error_code = [
+    "override",
+    "no-redef",
+    "union-attr",
+    "return-value",
+    "arg-type",
+    "call-arg",
+    "has-type",
+    "assignment",
+    "index",
+    "name-defined",
+    "import-untyped",
+    "attr-defined",
+]

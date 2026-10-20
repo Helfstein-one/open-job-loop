@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Ashby ATS Adapter.
 Supports jobs.ashbyhq.com forms and application workflows.
@@ -6,14 +7,13 @@ Supports jobs.ashbyhq.com forms and application workflows.
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from src.domain.models import ApplicationChannel
-from src.infrastructure.adapters.ats.base import BaseATSAdapter, ApplicationResult
 from src.application.use_cases.active_learning import ActiveLearningService
+from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.base import ApplicationResult, BaseATSAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +49,26 @@ class AshbyAdapter(BaseATSAdapter):
         logger.info(f"Navegando para vaga Ashby: {url}")
 
         try:
-            if url and not url.startswith("mock://") and (page.url != url or url.startswith("file://")):
+            if (
+                url
+                and not url.startswith("mock://")
+                and (page.url != url or url.startswith("file://"))
+            ):
                 await page.goto(url, timeout=30000)
                 await asyncio.sleep(0.5)
 
             # If there is an apply button that opens the form, click it
-            apply_btn = page.locator("button:has-text('Apply for this job'), a:has-text('Apply for this job')").first
+            apply_btn = page.locator(
+                "button:has-text('Apply for this job'), a:has-text('Apply for this job')"
+            ).first
             if await apply_btn.count() > 0 and await apply_btn.is_visible():
                 await apply_btn.click()
                 await asyncio.sleep(1.5)
 
             # 1. Candidate Name
-            candidate_name = await active_learning.get_or_learn_answer("Qual é o seu nome completo?", job_context)
+            candidate_name = await active_learning.get_or_learn_answer(
+                "Qual é o seu nome completo?", job_context
+            )
             name_input = page.locator("input[name='name'], input[name='fullName'], #name").first
             first_name_input = page.locator("input[name='firstName'], #firstName").first
             last_name_input = page.locator("input[name='lastName'], #lastName").first
@@ -81,7 +89,9 @@ class AshbyAdapter(BaseATSAdapter):
             # 2. Email
             email_input = page.locator("input[name='email'], input[type='email']").first
             if await email_input.count() > 0 and await email_input.is_visible():
-                email_val = await active_learning.get_or_learn_answer("Qual é o seu e-mail?", job_context)
+                email_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu e-mail?", job_context
+                )
                 await email_input.fill(email_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Email: {email_val}")
@@ -89,7 +99,9 @@ class AshbyAdapter(BaseATSAdapter):
             # 3. Phone
             phone_input = page.locator("input[name='phone'], input[type='tel']").first
             if await phone_input.count() > 0 and await phone_input.is_visible():
-                phone_val = await active_learning.get_or_learn_answer("Qual é o seu telefone / WhatsApp?", job_context)
+                phone_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu telefone / WhatsApp?", job_context
+                )
                 await phone_input.fill(phone_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Phone: {phone_val}")
@@ -128,10 +140,14 @@ class AshbyAdapter(BaseATSAdapter):
                         logs.append(f"Campo Ashby preenchido: '{label_text}' -> '{ans}'")
 
             # 6. Submit or Dry Run
-            submit_btn = page.locator("button[type='submit'], button:has-text('Submit Application')").first
+            submit_btn = page.locator(
+                "button[type='submit'], button:has-text('Submit Application')"
+            ).first
             if dry_run:
                 logs.append("Modo DRY-RUN ativado: formulário Ashby validado sem submissão final.")
-                logger.info(f"DRY-RUN Ashby concluído para {job_context.get('title')}. Total campos: {fields_filled}")
+                logger.info(
+                    f"DRY-RUN Ashby concluído para {job_context.get('title')}. Total campos: {fields_filled}"
+                )
                 return ApplicationResult(
                     success=True,
                     channel=self.channel,

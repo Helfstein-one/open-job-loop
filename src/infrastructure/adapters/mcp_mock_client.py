@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Mock MCP Ingestion Client for open-job-loop.
 
@@ -13,6 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal
 
+from src.domain.models import JobPosting
 from src.infrastructure.adapters.mcp_client import (
     BaseJobIngestionClient,
     McpConnectionError,
@@ -20,7 +22,6 @@ from src.infrastructure.adapters.mcp_client import (
     McpToolExecutionError,
     parse_job_payload,
 )
-from src.domain.models import JobPosting
 
 
 class MockMcpJobClient(BaseJobIngestionClient):
@@ -167,7 +168,9 @@ class MockMcpJobClient(BaseJobIngestionClient):
             List of JobPosting models.
         """
         if self.require_connection and not self._is_connected:
-            raise McpConnectionError("Mock client is not connected. Call connect() before fetch_jobs().")
+            raise McpConnectionError(
+                "Mock client is not connected. Call connect() before fetch_jobs()."
+            )
 
         if self.fail_on_fetch:
             if isinstance(self.fail_on_fetch, Exception):
@@ -198,7 +201,7 @@ class MockMcpJobClient(BaseJobIngestionClient):
             if self._cursor >= len(self._jobs):
                 return []
             end = min(self._cursor + limit, len(self._jobs))
-            batch = self._jobs[self._cursor:end]
+            batch = self._jobs[self._cursor : end]
             self._cursor = end
             return list(batch)
 

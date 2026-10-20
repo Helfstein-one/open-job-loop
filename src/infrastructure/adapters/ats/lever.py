@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Lever ATS Adapter.
 Supports jobs.lever.co forms and application flows.
@@ -6,14 +7,13 @@ Supports jobs.lever.co forms and application flows.
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from src.domain.models import ApplicationChannel
-from src.infrastructure.adapters.ats.base import BaseATSAdapter, ApplicationResult
 from src.application.use_cases.active_learning import ActiveLearningService
+from src.domain.models import ApplicationChannel
+from src.infrastructure.adapters.ats.base import ApplicationResult, BaseATSAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +53,18 @@ class LeverAdapter(BaseATSAdapter):
         logger.info(f"Navegando para vaga Lever: {apply_url}")
 
         try:
-            if url and not url.startswith("mock://") and (page.url != apply_url or url.startswith("file://")):
+            if (
+                url
+                and not url.startswith("mock://")
+                and (page.url != apply_url or url.startswith("file://"))
+            ):
                 await page.goto(apply_url, timeout=30000)
                 await asyncio.sleep(0.5)
 
             # If redirected back or button "Apply for this job" exists, click it
-            apply_btn = page.locator("a.postings-btn:has-text('Apply'), a:has-text('Apply for this job')").first
+            apply_btn = page.locator(
+                "a.postings-btn:has-text('Apply'), a:has-text('Apply for this job')"
+            ).first
             if await apply_btn.count() > 0 and await apply_btn.is_visible():
                 await apply_btn.click()
                 await asyncio.sleep(1.5)
@@ -66,7 +72,9 @@ class LeverAdapter(BaseATSAdapter):
             # 1. Full Name
             name_input = page.locator("input[name='name']").first
             if await name_input.count() > 0 and await name_input.is_visible():
-                candidate_name = await active_learning.get_or_learn_answer("Qual é o seu nome completo?", job_context)
+                candidate_name = await active_learning.get_or_learn_answer(
+                    "Qual é o seu nome completo?", job_context
+                )
                 await name_input.fill(candidate_name)
                 fields_filled += 1
                 logs.append(f"Preenchido Name: {candidate_name}")
@@ -74,7 +82,9 @@ class LeverAdapter(BaseATSAdapter):
             # 2. Email
             email_input = page.locator("input[name='email']").first
             if await email_input.count() > 0 and await email_input.is_visible():
-                email_val = await active_learning.get_or_learn_answer("Qual é o seu e-mail?", job_context)
+                email_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu e-mail?", job_context
+                )
                 await email_input.fill(email_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Email: {email_val}")
@@ -82,7 +92,9 @@ class LeverAdapter(BaseATSAdapter):
             # 3. Phone
             phone_input = page.locator("input[name='phone']").first
             if await phone_input.count() > 0 and await phone_input.is_visible():
-                phone_val = await active_learning.get_or_learn_answer("Qual é o seu telefone / WhatsApp?", job_context)
+                phone_val = await active_learning.get_or_learn_answer(
+                    "Qual é o seu telefone / WhatsApp?", job_context
+                )
                 await phone_input.fill(phone_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Phone: {phone_val}")
@@ -90,7 +102,9 @@ class LeverAdapter(BaseATSAdapter):
             # 4. Current Company / Org
             org_input = page.locator("input[name='org']").first
             if await org_input.count() > 0 and await org_input.is_visible():
-                org_val = await active_learning.get_or_learn_answer("Qual é a sua empresa atual?", job_context)
+                org_val = await active_learning.get_or_learn_answer(
+                    "Qual é a sua empresa atual?", job_context
+                )
                 await org_input.fill(org_val)
                 fields_filled += 1
                 logs.append(f"Preenchido Current Company: {org_val}")
@@ -112,7 +126,9 @@ class LeverAdapter(BaseATSAdapter):
 
             # 6. Resume Upload
             if resume_path and Path(resume_path).exists():
-                file_input = page.locator("input[type='file'][name='resume'], input[type='file']").first
+                file_input = page.locator(
+                    "input[type='file'][name='resume'], input[type='file']"
+                ).first
                 if await file_input.count() > 0:
                     await file_input.set_input_files(str(Path(resume_path).resolve()))
                     fields_filled += 1
@@ -120,7 +136,9 @@ class LeverAdapter(BaseATSAdapter):
                     logger.info(f"Currículo Lever anexado com sucesso ({resume_path})")
 
             # 7. Custom Questions
-            custom_questions = await page.locator("div.application-question, .custom-question, ul.application-questions li").all()
+            custom_questions = await page.locator(
+                "div.application-question, .custom-question, ul.application-questions li"
+            ).all()
             for q_elem in custom_questions:
                 label_el = q_elem.locator(".text, label").first
                 if await label_el.count() == 0:
@@ -140,10 +158,14 @@ class LeverAdapter(BaseATSAdapter):
                         logs.append(f"Pergunta Lever respondida: '{q_text}' -> '{ans}'")
 
             # 8. Submit or Dry Run
-            submit_btn = page.locator("button#btn-submit, button.template-btn-submit, button:has-text('Submit application')").first
+            submit_btn = page.locator(
+                "button#btn-submit, button.template-btn-submit, button:has-text('Submit application')"
+            ).first
             if dry_run:
                 logs.append("Modo DRY-RUN ativado: formulário Lever validado sem submissão final.")
-                logger.info(f"DRY-RUN Lever concluído para {job_context.get('title')}. Total campos: {fields_filled}")
+                logger.info(
+                    f"DRY-RUN Lever concluído para {job_context.get('title')}. Total campos: {fields_filled}"
+                )
                 return ApplicationResult(
                     success=True,
                     channel=self.channel,

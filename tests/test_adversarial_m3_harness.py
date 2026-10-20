@@ -36,19 +36,20 @@ from src.application.use_cases.pipeline import (
     PipelineConfig,
     PipelineEventType,
 )
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator, LLMTimeoutError
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     JobPosting,
     JobStatus,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator, LLMTimeoutError
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
 
 # ==============================================================================
 # Helper Classes & Fixtures
 # ==============================================================================
+
 
 class ControllableClock:
     """Deterministic monotonic clock provider."""
@@ -115,6 +116,7 @@ def make_test_job(
 # ==============================================================================
 # 1. LocalLoopGuard Extreme Timeout Recovery Stress Tests
 # ==============================================================================
+
 
 class TestLocalLoopGuardExtremeTimeouts:
     """Stress tests LocalLoopGuard timeout recovery under extreme conditions."""
@@ -244,13 +246,21 @@ class TestLocalLoopGuardExtremeTimeouts:
                     return "slow"
                 return f"fast_{idx}"
 
-            is_slow = (i % 2 == 1)
+            is_slow = i % 2 == 1
             res = await guard.run_guarded(step, i, is_slow, job=job)
             results.append(res)
 
         assert results == [
-            "fast_0", None, "fast_2", None, "fast_4",
-            None, "fast_6", None, "fast_8", None,
+            "fast_0",
+            None,
+            "fast_2",
+            None,
+            "fast_4",
+            None,
+            "fast_6",
+            None,
+            "fast_8",
+            None,
         ]
         assert guard.total_completed == 5
         assert guard.total_timeouts == 5
@@ -261,6 +271,7 @@ class TestLocalLoopGuardExtremeTimeouts:
 # ==============================================================================
 # 2. MCPCircuitBreaker Adversarial State Machine & Stress Tests
 # ==============================================================================
+
 
 class TestMCPCircuitBreakerAdversarial:
     """Stress tests MCPCircuitBreaker state machine, concurrency, and edge conditions."""
@@ -309,7 +320,9 @@ class TestMCPCircuitBreakerAdversarial:
         cb.record_failure()
         # Document actual behavior:
         trips_after = cb.total_trips
-        assert trips_after == initial_trips + 1, "Implementation increments total_trips while already OPEN"
+        assert (
+            trips_after == initial_trips + 1
+        ), "Implementation increments total_trips while already OPEN"
 
     def test_clock_boundary_recovery_to_half_open(self, controllable_clock):
         """Verify strict time boundary between OPEN and HALF_OPEN."""
@@ -459,6 +472,7 @@ class TestMCPCircuitBreakerAdversarial:
 # 3. Max Iterations & Exception Propagation Stress Tests
 # ==============================================================================
 
+
 class TestMaxIterationsAndExceptionPropagation:
     """Stress tests boundary limits and non-timeout exception propagation."""
 
@@ -572,6 +586,7 @@ class TestMaxIterationsAndExceptionPropagation:
 # 4. End-to-End Pipeline Fault & Resilience Stress Tests
 # ==============================================================================
 
+
 class TestPipelineEndToEndStress:
     """Stress tests full closed-loop pipeline under adversarial faults."""
 
@@ -628,18 +643,38 @@ class TestPipelineEndToEndStress:
         guard = LocalLoopGuard(max_iterations=10, timeout_seconds=0.01, repository=repo)
 
         # Pre-seed duplicate in DuckDB
-        dup_job = make_test_job("dup-seeded", title="Duplicate Title", raw_description="Duplicate job description exact text")
+        dup_job = make_test_job(
+            "dup-seeded",
+            title="Duplicate Title",
+            raw_description="Duplicate job description exact text",
+        )
         await repo.save_job(dup_job)
 
         jobs = [
             # Job 0: Normal high fit -> SHORTLISTED
-            make_test_job("job-shortlist", title="High Fit Python Engineer", raw_description="High Fit Python Engineer: FastAPI, DuckDB, Asyncio expert."),
+            make_test_job(
+                "job-shortlist",
+                title="High Fit Python Engineer",
+                raw_description="High Fit Python Engineer: FastAPI, DuckDB, Asyncio expert.",
+            ),
             # Job 1: Duplicate -> DUPLICATE
-            make_test_job("job-dup", title="Duplicate Title", raw_description="Duplicate job description exact text"),
+            make_test_job(
+                "job-dup",
+                title="Duplicate Title",
+                raw_description="Duplicate job description exact text",
+            ),
             # Job 2: Slow LLM -> SKIPPED_TIMEOUT
-            make_test_job("job-timeout", title="Timeout Python Engineer", raw_description="Timeout Python Engineer: Long running inference test description."),
+            make_test_job(
+                "job-timeout",
+                title="Timeout Python Engineer",
+                raw_description="Timeout Python Engineer: Long running inference test description.",
+            ),
             # Job 3: Normal low fit -> DISCARDED
-            make_test_job("job-discard", title="Low Fit Python Engineer", raw_description="Low Fit Python Engineer: Junior HTML and CSS role with zero Python."),
+            make_test_job(
+                "job-discard",
+                title="Low Fit Python Engineer",
+                raw_description="Low Fit Python Engineer: Junior HTML and CSS role with zero Python.",
+            ),
             # Job 4: Short description -> FAILED
             JobPosting(
                 id="job-short-desc",

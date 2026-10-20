@@ -38,12 +38,13 @@ from src.application.use_cases.harness import (
     MaxIterationsReachedError,
     MCPCircuitBreaker,
 )
-from src.infrastructure.adapters.llm_evaluator import LLMTimeoutError
 from src.domain.models import JobPosting, JobStatus
+from src.infrastructure.adapters.llm_evaluator import LLMTimeoutError
 
 # ==============================================================================
 # Fixtures & Helpers
 # ==============================================================================
+
 
 class MockClock:
     """Controllable monotonic clock for deterministic time simulation."""
@@ -86,6 +87,7 @@ def mock_repository() -> MagicMock:
 # 1. CircuitState Enum Tests
 # ==============================================================================
 
+
 class TestCircuitState:
     def test_enum_members(self):
         assert CircuitState.CLOSED == "CLOSED"
@@ -97,6 +99,7 @@ class TestCircuitState:
 # ==============================================================================
 # 2. MCPCircuitBreaker Unit Tests
 # ==============================================================================
+
 
 class TestMCPCircuitBreaker:
     def test_initial_state(self, mock_clock):
@@ -257,6 +260,7 @@ class TestMCPCircuitBreaker:
 # 3. LocalLoopGuard Unit Tests
 # ==============================================================================
 
+
 class TestLocalLoopGuard:
     def test_initialization_defaults(self):
         guard = LocalLoopGuard()
@@ -366,7 +370,9 @@ class TestLocalLoopGuard:
 
         assert result is None
         assert sample_job.status == JobStatus.SKIPPED_TIMEOUT
-        assert "LLMTimeoutError" in (sample_job.error_message or "") or "timed out" in (sample_job.error_message or "")
+        assert "LLMTimeoutError" in (sample_job.error_message or "") or "timed out" in (
+            sample_job.error_message or ""
+        )
         assert guard.total_timeouts == 1
         assert guard.total_skipped == 1
 
@@ -468,7 +474,13 @@ class TestLocalLoopGuard:
         guard = LocalLoopGuard(max_iterations=10, timeout_seconds=0.05)
 
         jobs = [
-            JobPosting(id=f"job-{i}", content_hash=f"{i}" * 64, title=f"Job {i}", company="Co", raw_description="Desc")
+            JobPosting(
+                id=f"job-{i}",
+                content_hash=f"{i}" * 64,
+                title=f"Job {i}",
+                company="Co",
+                raw_description="Desc",
+            )
             for i in range(4)
         ]
 

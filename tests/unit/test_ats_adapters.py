@@ -1,12 +1,13 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from src.application.use_cases.active_learning import ActiveLearningService
 from src.domain.models import ApplicationChannel
-from src.infrastructure.adapters.ats.router import get_ats_adapter, detect_channel
+from src.infrastructure.adapters.ats.ashby import AshbyAdapter
 from src.infrastructure.adapters.ats.greenhouse import GreenhouseAdapter
 from src.infrastructure.adapters.ats.lever import LeverAdapter
-from src.infrastructure.adapters.ats.ashby import AshbyAdapter
-from src.application.use_cases.active_learning import ActiveLearningService
+from src.infrastructure.adapters.ats.router import detect_channel, get_ats_adapter
 
 
 class TestATSAdaptersURLMatching:
@@ -49,7 +50,10 @@ class TestATSAdaptersURLMatching:
         assert detect_channel("https://boards.greenhouse.io/co/1") == ApplicationChannel.GREENHOUSE
         assert detect_channel("https://jobs.lever.co/co/1") == ApplicationChannel.LEVER
         assert detect_channel("https://jobs.ashbyhq.com/co/1") == ApplicationChannel.ASHBY
-        assert detect_channel("https://www.linkedin.com/jobs/view/123") == ApplicationChannel.LINKEDIN_EASY_APPLY
+        assert (
+            detect_channel("https://www.linkedin.com/jobs/view/123")
+            == ApplicationChannel.LINKEDIN_EASY_APPLY
+        )
         assert detect_channel("https://unknown.com/job") == ApplicationChannel.EXTERNAL_MANUAL
 
 
@@ -90,7 +94,11 @@ class TestActiveLearningService:
         assert ans == "8 years building distributed systems"
 
         mock_pm.add_chunk.assert_called_once()
-        args = mock_pm.add_chunk.call_args[1] if mock_pm.add_chunk.call_args[1] else mock_pm.add_chunk.call_args[0]
+        args = (
+            mock_pm.add_chunk.call_args[1]
+            if mock_pm.add_chunk.call_args[1]
+            else mock_pm.add_chunk.call_args[0]
+        )
         if isinstance(args, tuple):
             category, content = args[0], args[1]
         else:

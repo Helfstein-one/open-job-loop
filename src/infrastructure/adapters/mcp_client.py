@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 MCP Ingestion Client implementation for open-job-loop.
 
@@ -15,20 +16,21 @@ import types
 import uuid
 from contextlib import AsyncExitStack
 from typing import Any
-from typing_extensions import Self
 
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from typing_extensions import Self
 
-from src.infrastructure.adapters.repository import compute_job_hash
-from src.domain.models import JobPosting, JobStatus
 from src.application.ports.job_ingestion import JobIngestionPort
+from src.domain.models import JobPosting, JobStatus
+from src.infrastructure.adapters.repository import compute_job_hash
 
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # Exceptions
 # ==============================================================================
+
 
 class McpClientError(Exception):
     """Base exception for all MCP client errors."""
@@ -49,6 +51,7 @@ class McpPayloadError(McpClientError):
 # ==============================================================================
 # Payload Normalization Helper
 # ==============================================================================
+
 
 def parse_job_payload(
     raw_item: dict[str, Any] | JobPosting,
@@ -150,6 +153,7 @@ def parse_job_payload(
 # Base Client Interface
 # ==============================================================================
 
+
 class BaseJobIngestionClient(JobIngestionPort):
     """
     Abstract base class defining the contract for job ingestion clients.
@@ -202,6 +206,7 @@ class BaseJobIngestionClient(JobIngestionPort):
 # ==============================================================================
 # Model Context Protocol stdio Client
 # ==============================================================================
+
 
 class McpJobClient(BaseJobIngestionClient):
     """
@@ -352,8 +357,9 @@ class McpJobClient(BaseJobIngestionClient):
         tool_args = {"limit": limit, **merged_args}
         if self.tool_name == "search_jobs":
             import math
+
             tool_args = {
-                "keywords": merged_args.get("keywords", "Python Software Engineer"), 
+                "keywords": merged_args.get("keywords", "Python Software Engineer"),
                 "max_pages": merged_args.get("max_pages", max(1, math.ceil(limit / 10))),
                 "easy_apply": merged_args.get("easy_apply", True),
             }
@@ -384,18 +390,24 @@ class McpJobClient(BaseJobIngestionClient):
                     text = getattr(block, "text", "")
                     if text:
                         error_details.append(text)
-                err_msg = "; ".join(error_details) if error_details else "Server reported tool error"
-                
+                err_msg = (
+                    "; ".join(error_details) if error_details else "Server reported tool error"
+                )
+
                 msg_lower = err_msg.lower()
-                if "login is still in progress" in msg_lower or "downloading the patchright chromium browser" in msg_lower or "keychain prompt" in msg_lower:
-                    logger.warning(f"MCP Plugin waiting for setup/login. Retrying in 5s... ({attempt+1}/{max_attempts}) | MSG: {err_msg}")
+                if (
+                    "login is still in progress" in msg_lower
+                    or "downloading the patchright chromium browser" in msg_lower
+                    or "keychain prompt" in msg_lower
+                ):
+                    logger.warning(
+                        f"MCP Plugin waiting for setup/login. Retrying in 5s... ({attempt+1}/{max_attempts}) | MSG: {err_msg}"
+                    )
                     await asyncio.sleep(5)
                     continue
-                    
-                raise McpToolExecutionError(
-                    f"Tool '{self.tool_name}' returned error: {err_msg}"
-                )
-            
+
+                raise McpToolExecutionError(f"Tool '{self.tool_name}' returned error: {err_msg}")
+
             # If no error, break out of loop
             break
         else:
@@ -405,24 +417,33 @@ class McpJobClient(BaseJobIngestionClient):
         # If we are using linkedin search_jobs, we need to fetch the actual details!
         if self.tool_name == "search_jobs" and raw_dicts and "references" in raw_dicts[0]:
             search_results = raw_dicts[0].get("references", {}).get("search_results", [])
-            
+
             jobs: list[JobPosting] = []
             for item in search_results:
-                if item.get("kind") != "job": continue
+                if item.get("kind") != "job":
+                    continue
                 url = item.get("url", "")
                 title = item.get("text", "Unknown Title")
-                
+
                 # Extract job ID from url: /jobs/view/12345/
                 jid = None
                 import re
-                m = re.search(r'/jobs/view/(\d+)', url)
-                if m: jid = m.group(1)
-                if not jid: continue
-                
+
+                m = re.search(r"/jobs/view/(\d+)", url)
+                if m:
+                    jid = m.group(1)
+                if not jid:
+                    continue
+
                 try:
-                    res = await self._session.call_tool("get_job_details", arguments={"job_id": str(jid)}, read_timeout_seconds=self.read_timeout_seconds)
-                    if getattr(res, "is_error", False): continue
-                    
+                    res = await self._session.call_tool(
+                        "get_job_details",
+                        arguments={"job_id": str(jid)},
+                        read_timeout_seconds=self.read_timeout_seconds,
+                    )
+                    if getattr(res, "is_error", False):
+                        continue
+
                     desc = ""
                     company = "LinkedIn Company"
                     location = "Remote"
@@ -430,17 +451,24 @@ class McpJobClient(BaseJobIngestionClient):
                         text = getattr(block, "text", "")
                         try:
                             import json
+
                             parsed = json.loads(text)
                             if isinstance(parsed, dict):
                                 if "sections" in parsed and "job_posting" in parsed["sections"]:
                                     jp_text = parsed["sections"]["job_posting"]
                                     desc += jp_text + "\n"
                                     lines = [l.strip() for l in jp_text.split("\n") if l.strip()]
-                                    if len(lines) >= 1 and not lines[0].lower().startswith("is this"):
+                                    if len(lines) >= 1 and not lines[0].lower().startswith(
+                                        "is this"
+                                    ):
                                         company = lines[0]
-                                    if len(lines) >= 2 and not lines[1].lower().startswith("is this"):
+                                    if len(lines) >= 2 and not lines[1].lower().startswith(
+                                        "is this"
+                                    ):
                                         title = lines[1]
-                                    if len(lines) >= 3 and not lines[2].lower().startswith("is this"):
+                                    if len(lines) >= 3 and not lines[2].lower().startswith(
+                                        "is this"
+                                    ):
                                         location = lines[2].split("·")[0].strip()
                                 else:
                                     data = parsed.get("job", parsed)
@@ -448,7 +476,11 @@ class McpJobClient(BaseJobIngestionClient):
                                     if data.get("title"):
                                         title = data["title"]
                                     if data.get("company"):
-                                        company = data["company"].get("name", "") if isinstance(data["company"], dict) else str(data["company"])
+                                        company = (
+                                            data["company"].get("name", "")
+                                            if isinstance(data["company"], dict)
+                                            else str(data["company"])
+                                        )
                         except Exception:
                             desc += text + "\n"
 
@@ -458,10 +490,11 @@ class McpJobClient(BaseJobIngestionClient):
                         "company": company,
                         "location": location,
                         "description": desc.strip() or "No description",
-                        "url": f"https://www.linkedin.com/jobs/view/{jid}"
+                        "url": f"https://www.linkedin.com/jobs/view/{jid}",
                     }
                     jobs.append(parse_job_payload(raw, default_source=self.source_name))
-                    if len(jobs) >= limit: break
+                    if len(jobs) >= limit:
+                        break
                 except Exception as e:
                     logger.warning(f"Failed to get details for {jid}: {e}")
                     pass

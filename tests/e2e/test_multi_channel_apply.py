@@ -1,11 +1,12 @@
-import pytest
 from pathlib import Path
-import duckdb
 from unittest.mock import AsyncMock, patch
 
+import duckdb
+import pytest
+
+from src.application.use_cases.auto_apply import AutoApplyWorker
 from src.domain.models import ApplicationChannel
 from src.infrastructure.adapters.ats.base import ApplicationResult
-from src.application.use_cases.auto_apply import AutoApplyWorker
 
 
 @pytest.mark.asyncio
@@ -78,9 +79,20 @@ async def test_e2e_multi_channel_auto_apply_worker(tmp_path: Path):
         dry_run=True,
     )
 
-    with patch("src.infrastructure.adapters.ats.greenhouse.GreenhouseAdapter.fill_and_submit", AsyncMock(return_value=mock_gh_res)), \
-         patch("src.infrastructure.adapters.ats.lever.LeverAdapter.fill_and_submit", AsyncMock(return_value=mock_lever_res)), \
-         patch("src.infrastructure.adapters.ats.ashby.AshbyAdapter.fill_and_submit", AsyncMock(return_value=mock_ashby_res)):
+    with (
+        patch(
+            "src.infrastructure.adapters.ats.greenhouse.GreenhouseAdapter.fill_and_submit",
+            AsyncMock(return_value=mock_gh_res),
+        ),
+        patch(
+            "src.infrastructure.adapters.ats.lever.LeverAdapter.fill_and_submit",
+            AsyncMock(return_value=mock_lever_res),
+        ),
+        patch(
+            "src.infrastructure.adapters.ats.ashby.AshbyAdapter.fill_and_submit",
+            AsyncMock(return_value=mock_ashby_res),
+        ),
+    ):
 
         worker = AutoApplyWorker(
             db_path=db_file,
@@ -99,7 +111,9 @@ async def test_e2e_multi_channel_auto_apply_worker(tmp_path: Path):
 
     # Verify DuckDB records have been updated with channel and logs
     conn = duckdb.connect(db_file)
-    rows = conn.execute("SELECT id, status, channel, application_log FROM job_postings ORDER BY id").fetchall()
+    rows = conn.execute(
+        "SELECT id, status, channel, application_log FROM job_postings ORDER BY id"
+    ).fetchall()
     conn.close()
 
     assert len(rows) == 3

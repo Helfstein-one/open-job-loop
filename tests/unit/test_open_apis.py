@@ -1,13 +1,13 @@
-import pytest
-import httpx
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from src.infrastructure.adapters.open_apis_ingestion import (
-    clean_html_text,
-    OpenApisJobClient,
-    HybridJobClient,
-)
+import pytest
+
 from src.domain.models import JobPosting, JobStatus
+from src.infrastructure.adapters.open_apis_ingestion import (
+    HybridJobClient,
+    OpenApisJobClient,
+    clean_html_text,
+)
 
 
 def test_clean_html_text():
@@ -104,9 +104,13 @@ async def test_hybrid_client_fault_isolation():
     ]
 
     mock_linkedin = AsyncMock()
-    mock_linkedin.fetch_jobs.side_effect = Exception("Authentication barrier / login redirect detected")
+    mock_linkedin.fetch_jobs.side_effect = Exception(
+        "Authentication barrier / login redirect detected"
+    )
 
-    hybrid = HybridJobClient(open_client=mock_open, linkedin_client=mock_linkedin, enable_linkedin=True)
+    hybrid = HybridJobClient(
+        open_client=mock_open, linkedin_client=mock_linkedin, enable_linkedin=True
+    )
     await hybrid.connect()
 
     jobs = await hybrid.fetch_jobs(limit=10)

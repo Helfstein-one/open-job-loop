@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 DAG Pipeline Orchestrator for open-job-loop.
 
@@ -22,33 +23,33 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from datetime import timezone, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import (
     Any,
 )
 
+from src.application.ports import (
+    JobEvaluatorPort,
+    JobIngestionPort,
+    JobRepositoryPort,
+)
 from src.application.use_cases.harness import (
     CircuitOpenError,
     LocalLoopGuard,
 )
 from src.application.use_cases.truncator import DescriptionTooShortError, TextTruncator
-from src.application.ports import (
-    JobRepositoryPort,
-    JobEvaluatorPort,
-    JobIngestionPort,
-)
-from src.infrastructure.adapters.repository import compute_job_hash
-from src.infrastructure.adapters.llm_evaluator import (
-    LLMConnectionError,
-    LLMTimeoutError,
-)
 from src.domain.models import (
     CandidateProfile,
     JobPosting,
     JobStatus,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import (
+    LLMConnectionError,
+    LLMTimeoutError,
+)
+from src.infrastructure.adapters.repository import compute_job_hash
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,12 @@ logger = logging.getLogger(__name__)
 # Pipeline Event System
 # ==============================================================================
 
+
 class PipelineEventType(str, Enum):
     """
     Observable pipeline telemetry event types emitted during DAG execution.
     """
+
     PIPELINE_STARTED = "PIPELINE_STARTED"
     INGESTION_STARTED = "INGESTION_STARTED"
     INGESTION_COMPLETED = "INGESTION_COMPLETED"
@@ -82,6 +85,7 @@ class PipelineEvent:
     """
     Telemetry event payload delivered to UI and monitoring subscribers.
     """
+
     event_type: PipelineEventType
     job: JobPosting | None = None
     message: str = ""
@@ -97,11 +101,13 @@ PipelineCallback = Callable[[PipelineEvent], Awaitable[None] | None]
 # Configuration & Result Schemas
 # ==============================================================================
 
+
 @dataclass
 class PipelineConfig:
     """
     Operational configuration for JobPipeline execution.
     """
+
     score_threshold: int = 60
     batch_size: int = 10
     max_iterations: int = 50
@@ -117,6 +123,7 @@ class PipelineResult:
     Guarantees O(1) RAM consumption by storing only scalar counters.
     Supports dictionary access and singular/plural metric aliases.
     """
+
     total_ingested: int = 0
     duplicates: int = 0
     preprocessed: int = 0
@@ -166,6 +173,7 @@ DEFAULT_CANDIDATE_PROFILE = CandidateProfile(
 # ==============================================================================
 # Job Pipeline Orchestrator
 # ==============================================================================
+
 
 class JobPipeline:
     """
@@ -254,6 +262,7 @@ class JobPipeline:
 
     def _setup_ui_adapter(self, ui: Any) -> None:
         """Connect UI manager to pipeline events."""
+
         def _ui_adapter(event: PipelineEvent) -> None:
             try:
                 ev = event.event_type
@@ -270,7 +279,11 @@ class JobPipeline:
                     if hasattr(ui, "on_stage_update"):
                         ui.on_stage_update(2, "2. Deduplication (DuckDB)", "DONE")
                     if hasattr(ui, "on_job_start") and event.job is not None:
-                        ui.on_job_start(event.job, iteration=self._current_metrics["ingested"], max_iterations=self.config.max_iterations)
+                        ui.on_job_start(
+                            event.job,
+                            iteration=self._current_metrics["ingested"],
+                            max_iterations=self.config.max_iterations,
+                        )
                 elif ev == PipelineEventType.JOB_DUPLICATE:
                     self._current_metrics["duplicate"] += 1
                     if hasattr(ui, "on_stage_update"):
@@ -287,7 +300,11 @@ class JobPipeline:
                 elif ev == PipelineEventType.JOB_TRIAGED:
                     if hasattr(ui, "on_stage_update"):
                         ui.on_stage_update(4, "4. Triage (Llama 3.2)", "DONE")
-                    if hasattr(ui, "on_job_triaged") and event.job is not None and getattr(event.job, "evaluation", None):
+                    if (
+                        hasattr(ui, "on_job_triaged")
+                        and event.job is not None
+                        and getattr(event.job, "evaluation", None)
+                    ):
                         ui.on_job_triaged(event.job, event.job.evaluation)
                 elif ev == PipelineEventType.JOB_SHORTLISTED:
                     self._current_metrics["shortlisted"] += 1
@@ -385,12 +402,14 @@ class JobPipeline:
         if self.ingestion_client is None:
             raise ValueError("Cannot ingest jobs: no ingestion_client provided to JobPipeline")
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.INGESTION_STARTED,
-            message=f"Fetching up to {limit} jobs from ingestion client",
-            stage_number=1,
-            data={"limit": limit},
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.INGESTION_STARTED,
+                message=f"Fetching up to {limit} jobs from ingestion client",
+                stage_number=1,
+                data={"limit": limit},
+            )
+        )
 
         # Check guard circuit breaker if present
         if (
@@ -403,12 +422,14 @@ class JobPipeline:
 
         jobs = await self.ingestion_client.fetch_jobs(limit=limit)
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.INGESTION_COMPLETED,
-            message=f"Ingested {len(jobs)} jobs",
-            stage_number=1,
-            data={"count": len(jobs)},
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.INGESTION_COMPLETED,
+                message=f"Ingested {len(jobs)} jobs",
+                stage_number=1,
+                data={"count": len(jobs)},
+            )
+        )
 
         return jobs
 
@@ -448,12 +469,14 @@ class JobPipeline:
         is_dup = await self.repository.is_duplicate(job.content_hash)
         if is_dup:
             job.status = JobStatus.DUPLICATE
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_DUPLICATE,
-                job=job,
-                stage_number=2,
-                message=f"Job '{job.title}' at '{job.company}' is a duplicate (hash {job.content_hash[:8]}...)",
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_DUPLICATE,
+                    job=job,
+                    stage_number=2,
+                    message=f"Job '{job.title}' at '{job.company}' is a duplicate (hash {job.content_hash[:8]}...)",
+                )
+            )
             return False
 
         # 2. Persist new job atomically to DuckDB
@@ -462,20 +485,24 @@ class JobPipeline:
         if not saved:
             # Atomic conflict on concurrent insertion
             job.status = JobStatus.DUPLICATE
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_DUPLICATE,
-                job=job,
-                stage_number=2,
-                message=f"Job '{job.title}' collided on insert (duplicate hash {job.content_hash[:8]}...)",
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_DUPLICATE,
+                    job=job,
+                    stage_number=2,
+                    message=f"Job '{job.title}' collided on insert (duplicate hash {job.content_hash[:8]}...)",
+                )
+            )
             return False
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.JOB_INGESTED,
-            job=job,
-            stage_number=2,
-            message=f"Job '{job.title}' ingested and persisted (hash {job.content_hash[:8]}...)",
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.JOB_INGESTED,
+                job=job,
+                stage_number=2,
+                message=f"Job '{job.title}' ingested and persisted (hash {job.content_hash[:8]}...)",
+            )
+        )
         return True
 
     # --------------------------------------------------------------------------
@@ -511,13 +538,15 @@ class JobPipeline:
             job.status = JobStatus.PREPROCESSED
 
             await self.repository.update_job(job)
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_PREPROCESSED,
-                job=job,
-                stage_number=3,
-                message=f"Job pre-processed (tokens: {job.token_count}, truncated: {job.is_truncated})",
-                data={"tokens": job.token_count, "truncated": job.is_truncated},
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_PREPROCESSED,
+                    job=job,
+                    stage_number=3,
+                    message=f"Job pre-processed (tokens: {job.token_count}, truncated: {job.is_truncated})",
+                    data={"tokens": job.token_count, "truncated": job.is_truncated},
+                )
+            )
 
         except DescriptionTooShortError as exc:
             job.status = JobStatus.FAILED
@@ -527,12 +556,14 @@ class JobPipeline:
                 status=JobStatus.FAILED,
                 error_message=job.error_message,
             )
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_ERROR,
-                job=job,
-                stage_number=3,
-                message=job.error_message,
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_ERROR,
+                    job=job,
+                    stage_number=3,
+                    message=job.error_message,
+                )
+            )
 
         except Exception as exc:  # noqa: BLE001
             job.status = JobStatus.ERROR
@@ -542,12 +573,14 @@ class JobPipeline:
                 status=JobStatus.ERROR,
                 error_message=job.error_message,
             )
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_ERROR,
-                job=job,
-                stage_number=3,
-                message=job.error_message,
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_ERROR,
+                    job=job,
+                    stage_number=3,
+                    message=job.error_message,
+                )
+            )
 
         return job
 
@@ -578,12 +611,14 @@ class JobPipeline:
         """
         job_desc = job.description or job.cleaned_description or job.raw_description
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.JOB_TRIAGE_STARTED,
-            job=job,
-            stage_number=4,
-            message=f"Evaluating fit for '{job.title}' against candidate profile",
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.JOB_TRIAGE_STARTED,
+                job=job,
+                stage_number=4,
+                message=f"Evaluating fit for '{job.title}' against candidate profile",
+            )
+        )
 
         try:
             if self.guard is not None and hasattr(self.guard, "run_guarded"):
@@ -597,12 +632,14 @@ class JobPipeline:
                 )
                 if evaluation is None:
                     if job.status == JobStatus.SKIPPED_TIMEOUT:
-                        await self.emit(PipelineEvent(
-                            event_type=PipelineEventType.JOB_SKIPPED_TIMEOUT,
-                            job=job,
-                            stage_number=4,
-                            message=job.error_message or "Triage timed out",
-                        ))
+                        await self.emit(
+                            PipelineEvent(
+                                event_type=PipelineEventType.JOB_SKIPPED_TIMEOUT,
+                                job=job,
+                                stage_number=4,
+                                message=job.error_message or "Triage timed out",
+                            )
+                        )
                     return job
             else:
                 async with asyncio.timeout(self.config.timeout_seconds):
@@ -617,18 +654,20 @@ class JobPipeline:
             job.status = JobStatus.TRIAGED
 
             await self.repository.update_job(job)
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_TRIAGED,
-                job=job,
-                stage_number=4,
-                message=f"Job triaged: fit_score={job.fit_score}, recommendation={job.recommendation}",
-                data={
-                    "fit_score": job.fit_score,
-                    "recommendation": job.recommendation.value if job.recommendation else None,
-                    "matched_skills": evaluation.matched_skills,
-                    "missing_skills": evaluation.missing_skills,
-                },
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_TRIAGED,
+                    job=job,
+                    stage_number=4,
+                    message=f"Job triaged: fit_score={job.fit_score}, recommendation={job.recommendation}",
+                    data={
+                        "fit_score": job.fit_score,
+                        "recommendation": job.recommendation.value if job.recommendation else None,
+                        "matched_skills": evaluation.matched_skills,
+                        "missing_skills": evaluation.missing_skills,
+                    },
+                )
+            )
 
         except (TimeoutError, LLMTimeoutError) as exc:
             job.status = JobStatus.SKIPPED_TIMEOUT
@@ -638,12 +677,14 @@ class JobPipeline:
                 status=JobStatus.SKIPPED_TIMEOUT,
                 error_message=job.error_message,
             )
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_SKIPPED_TIMEOUT,
-                job=job,
-                stage_number=4,
-                message=job.error_message,
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_SKIPPED_TIMEOUT,
+                    job=job,
+                    stage_number=4,
+                    message=job.error_message,
+                )
+            )
 
         except LLMConnectionError as exc:
             job.status = JobStatus.ERROR
@@ -653,12 +694,14 @@ class JobPipeline:
                 status=JobStatus.ERROR,
                 error_message=job.error_message,
             )
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_ERROR,
-                job=job,
-                stage_number=4,
-                message=job.error_message,
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_ERROR,
+                    job=job,
+                    stage_number=4,
+                    message=job.error_message,
+                )
+            )
             if self.config.stop_on_llm_connection_error:
                 raise
 
@@ -670,12 +713,14 @@ class JobPipeline:
                 status=JobStatus.ERROR,
                 error_message=job.error_message,
             )
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.JOB_ERROR,
-                job=job,
-                stage_number=4,
-                message=job.error_message,
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.JOB_ERROR,
+                    job=job,
+                    stage_number=4,
+                    message=job.error_message,
+                )
+            )
 
         return job
 
@@ -721,17 +766,19 @@ class JobPipeline:
             recommendation=job.recommendation,
         )
 
-        await self.emit(PipelineEvent(
-            event_type=event_type,
-            job=job,
-            stage_number=5,
-            message=msg,
-            data={
-                "fit_score": job.fit_score,
-                "threshold": self.score_threshold,
-                "decision": job.recommendation.value if job.recommendation else None,
-            },
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=event_type,
+                job=job,
+                stage_number=5,
+                message=msg,
+                data={
+                    "fit_score": job.fit_score,
+                    "threshold": self.score_threshold,
+                    "decision": job.recommendation.value if job.recommendation else None,
+                },
+            )
+        )
         return job
 
     # --------------------------------------------------------------------------
@@ -808,11 +855,13 @@ class JobPipeline:
             else self.config.max_iterations
         )
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.PIPELINE_STARTED,
-            message=f"Pipeline started (limit={eff_limit}, batch_size={eff_batch})",
-            data={"limit": eff_limit, "batch_size": eff_batch},
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.PIPELINE_STARTED,
+                message=f"Pipeline started (limit={eff_limit}, batch_size={eff_batch})",
+                data={"limit": eff_limit, "batch_size": eff_batch},
+            )
+        )
 
         try:
             while result.total_processed < eff_limit:
@@ -822,11 +871,13 @@ class JobPipeline:
                     and hasattr(self.guard, "can_continue")
                     and not self.guard.can_continue()
                 ):
-                    await self.emit(PipelineEvent(
-                        event_type=PipelineEventType.PIPELINE_STOPPED,
-                        message="Pipeline stopped: LocalLoopGuard iteration limit reached",
-                        data={"iterations": getattr(self.guard, "current_iteration", 0)},
-                    ))
+                    await self.emit(
+                        PipelineEvent(
+                            event_type=PipelineEventType.PIPELINE_STOPPED,
+                            message="Pipeline stopped: LocalLoopGuard iteration limit reached",
+                            data={"iterations": getattr(self.guard, "current_iteration", 0)},
+                        )
+                    )
                     break
 
                 remaining = eff_limit - result.total_processed
@@ -836,17 +887,21 @@ class JobPipeline:
                     batch = await self.stage_1_ingest(limit=fetch_count)
                 except CircuitOpenError as circ_err:
                     logger.warning("Pipeline paused: MCP Circuit Breaker is OPEN: %s", circ_err)
-                    await self.emit(PipelineEvent(
-                        event_type=PipelineEventType.PIPELINE_STOPPED,
-                        message=f"Pipeline stopped: MCP Circuit Breaker is OPEN: {circ_err}",
-                    ))
+                    await self.emit(
+                        PipelineEvent(
+                            event_type=PipelineEventType.PIPELINE_STOPPED,
+                            message=f"Pipeline stopped: MCP Circuit Breaker is OPEN: {circ_err}",
+                        )
+                    )
                     break
                 except Exception as ing_err:  # noqa: BLE001
                     logger.error("Ingestion stage error: %s", ing_err)
-                    await self.emit(PipelineEvent(
-                        event_type=PipelineEventType.PIPELINE_STOPPED,
-                        message=f"Pipeline stopped on ingestion error: {ing_err}",
-                    ))
+                    await self.emit(
+                        PipelineEvent(
+                            event_type=PipelineEventType.PIPELINE_STOPPED,
+                            message=f"Pipeline stopped on ingestion error: {ing_err}",
+                        )
+                    )
                     break
 
                 if not batch:
@@ -892,16 +947,18 @@ class JobPipeline:
 
         finally:
             result.duration_seconds = time.monotonic() - start_time
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.PIPELINE_COMPLETED,
-                message=(
-                    f"Pipeline completed in {result.duration_seconds:.2f}s: "
-                    f"{result.shortlisted} shortlisted, {result.discarded} discarded, "
-                    f"{result.duplicates} duplicates, {result.skipped_timeout} timeouts, "
-                    f"{result.errors} errors"
-                ),
-                data=result.to_dict(),
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.PIPELINE_COMPLETED,
+                    message=(
+                        f"Pipeline completed in {result.duration_seconds:.2f}s: "
+                        f"{result.shortlisted} shortlisted, {result.discarded} discarded, "
+                        f"{result.duplicates} duplicates, {result.skipped_timeout} timeouts, "
+                        f"{result.errors} errors"
+                    ),
+                    data=result.to_dict(),
+                )
+            )
 
         return result
 
@@ -928,11 +985,13 @@ class JobPipeline:
             else self.config.max_iterations
         )
 
-        await self.emit(PipelineEvent(
-            event_type=PipelineEventType.PIPELINE_STARTED,
-            message=f"Pipeline stream started (limit={eff_limit})",
-            data={"limit": eff_limit},
-        ))
+        await self.emit(
+            PipelineEvent(
+                event_type=PipelineEventType.PIPELINE_STARTED,
+                message=f"Pipeline stream started (limit={eff_limit})",
+                data={"limit": eff_limit},
+            )
+        )
 
         try:
             async for job in job_stream:
@@ -944,10 +1003,12 @@ class JobPipeline:
                     and hasattr(self.guard, "can_continue")
                     and not self.guard.can_continue()
                 ):
-                    await self.emit(PipelineEvent(
-                        event_type=PipelineEventType.PIPELINE_STOPPED,
-                        message="Stream stopped: LocalLoopGuard iteration limit reached",
-                    ))
+                    await self.emit(
+                        PipelineEvent(
+                            event_type=PipelineEventType.PIPELINE_STOPPED,
+                            message="Stream stopped: LocalLoopGuard iteration limit reached",
+                        )
+                    )
                     break
 
                 processed_job = await self.process_job(job)
@@ -980,10 +1041,12 @@ class JobPipeline:
 
         finally:
             result.duration_seconds = time.monotonic() - start_time
-            await self.emit(PipelineEvent(
-                event_type=PipelineEventType.PIPELINE_COMPLETED,
-                message=f"Pipeline stream completed in {result.duration_seconds:.2f}s",
-                data=result.to_dict(),
-            ))
+            await self.emit(
+                PipelineEvent(
+                    event_type=PipelineEventType.PIPELINE_COMPLETED,
+                    message=f"Pipeline stream completed in {result.duration_seconds:.2f}s",
+                    data=result.to_dict(),
+                )
+            )
 
         return result

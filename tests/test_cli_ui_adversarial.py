@@ -25,18 +25,18 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
-from src.presentation.cli import app
 from src.application.use_cases.harness import LocalLoopGuard
 from src.application.use_cases.pipeline import JobPipeline, PipelineConfig
-from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
-from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
-from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
 from src.domain.models import (
     JobPosting,
     JobStatus,
     MatchEvaluation,
     Recommendation,
 )
+from src.infrastructure.adapters.llm_evaluator import JobFitEvaluator
+from src.infrastructure.adapters.mcp_mock_client import MockMcpJobClient
+from src.infrastructure.adapters.repository import JobRepository, compute_job_hash
+from src.presentation.cli import app
 from src.presentation.ui_banner import TAGLINE
 from src.presentation.ui_console import HeadlessPipelineUI, LivePipelineUI, create_pipeline_ui
 
@@ -53,6 +53,7 @@ def runner() -> CliRunner:
 # ==============================================================================
 # Helper Factories
 # ==============================================================================
+
 
 def make_job_payload(idx: int) -> dict[str, Any]:
     return {
@@ -89,6 +90,7 @@ def make_job_posting(idx: int) -> JobPosting:
 # ==============================================================================
 # 1. CLI Entrypoints Parity & Subprocess Tests
 # ==============================================================================
+
 
 class TestCLIEntrypoints:
     """Stress tests verifying both jobloop and open-job-loop entrypoints."""
@@ -169,6 +171,7 @@ class TestCLIEntrypoints:
 # 2. CLI Edge Cases & Boundary Validation
 # ==============================================================================
 
+
 class TestCLIBoundaryValidation:
     """Stress tests invalid options, out-of-range boundaries, and non-numeric inputs."""
 
@@ -202,6 +205,7 @@ class TestCLIBoundaryValidation:
 # ==============================================================================
 # 3. DuckDB File Edge Cases (Nonexistent Dirs & Corrupt Files)
 # ==============================================================================
+
 
 class TestDuckDBFileResilience:
     """Stress tests DuckDB path resolution, directory auto-creation, and corruption handling."""
@@ -262,6 +266,7 @@ class TestDuckDBFileResilience:
 # 4. Non-TTY Pipes & Headless Auto-Detection
 # ==============================================================================
 
+
 class TestNonTTYPipesAndHeadless:
     """Stress tests pipeline behavior in piped / non-TTY and headless environments."""
 
@@ -314,6 +319,7 @@ class TestNonTTYPipesAndHeadless:
 # ==============================================================================
 # 5. Memory Scaling Under 100+ Jobs (Bounded O(1) RAM Verification)
 # ==============================================================================
+
 
 class TestMemoryScalingO1:
     """

@@ -16,6 +16,7 @@ def truncator() -> TextTruncator:
 # 1. Token Estimation Tests
 # ==============================================================================
 
+
 def test_estimate_tokens_empty(truncator: TextTruncator):
     assert truncator.estimate_tokens("") == 0
 
@@ -39,6 +40,7 @@ def test_estimate_tokens_custom_ratio():
 # ==============================================================================
 # 2. Boilerplate & EEO Removal Tests
 # ==============================================================================
+
 
 def test_clean_boilerplate_eeo(truncator: TextTruncator):
     raw = (
@@ -119,6 +121,7 @@ def test_clean_boilerplate_preserves_salary(truncator: TextTruncator):
 # 3. Length Validation Tests
 # ==============================================================================
 
+
 def test_length_validation_empty_and_none(truncator: TextTruncator):
     with pytest.raises(DescriptionTooShortError):
         truncator.truncate("")
@@ -138,8 +141,8 @@ def test_length_validation_short_raw(truncator: TextTruncator):
 def test_length_validation_boilerplate_only(truncator: TextTruncator):
     # Raw is 300+ chars, but meaningful content after EEO removal is < 50 chars
     raw = (
-        "Short title. " +
-        "We are an Equal Opportunity Employer. All qualified applicants will receive "
+        "Short title. "
+        + "We are an Equal Opportunity Employer. All qualified applicants will receive "
         "consideration for employment without regard to race, color, religion, sex, "
         "national origin, disability, or protected veteran status. " * 3
     )
@@ -161,6 +164,7 @@ def test_length_validation_boundary(truncator: TextTruncator):
 # ==============================================================================
 # 4. Truncation Ceiling Tests
 # ==============================================================================
+
 
 def test_truncation_ceiling_under_limit(truncator: TextTruncator):
     text = (
@@ -194,7 +198,9 @@ def test_truncation_ceiling_exceeds_limit(truncator: TextTruncator):
 def test_truncation_boundary_preservation(truncator: TextTruncator):
     # Verify truncation cuts at sentence or paragraph boundary, not mid-word
     para_1 = "Section 1: Core Responsibilities. Build high-throughput data ingestion microservices."
-    para_2 = "Section 2: Minimum Qualifications. Must have 5 years Python 3.12 and async programming."
+    para_2 = (
+        "Section 2: Minimum Qualifications. Must have 5 years Python 3.12 and async programming."
+    )
     huge_padding = " " + ("Detailed supplementary qualification requirement. " * 300)
     full_text = f"{para_1}\n\n{para_2}\n\n{huge_padding}"
 
@@ -218,6 +224,7 @@ def test_truncation_custom_max_tokens():
 # ==============================================================================
 # 5. XML Delimiter & Injection Defense Tests
 # ==============================================================================
+
 
 def test_xml_delimiter_wrapping_default(truncator: TextTruncator):
     text = (
@@ -269,6 +276,7 @@ def test_strip_delimiters(truncator: TextTruncator):
 # ==============================================================================
 # 6. Idempotency & Initialization Validation Tests
 # ==============================================================================
+
 
 def test_truncator_idempotency(truncator: TextTruncator):
     sample = (
