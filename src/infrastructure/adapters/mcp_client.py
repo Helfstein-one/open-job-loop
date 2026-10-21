@@ -366,7 +366,7 @@ class McpJobClient(BaseJobIngestionClient):
             if merged_args.get("location"):
                 tool_args["location"] = merged_args["location"]
 
-        max_attempts = 12 if self.tool_name == "search_jobs" else 1
+        max_attempts = 2 if self.tool_name == "search_jobs" else 1
         result = None
         for attempt in range(max_attempts):
             try:

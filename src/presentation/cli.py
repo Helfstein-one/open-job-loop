@@ -1018,6 +1018,11 @@ def batch_run_cmd(
         "-s",
         help="Job discovery source: 'hybrid' (Open APIs + LinkedIn), 'open' (Open APIs only), or 'linkedin'.",
     ),
+    region: str = typer.Option(
+        "ALL",
+        "--region",
+        help="Target region filter: 'US' (United States), 'UK' (United Kingdom), 'EU' (European Union), or 'ALL'.",
+    ),
 ) -> None:
     """
     Execute autonomous multi-query international batch rotation (US/UK/EU).
@@ -1026,13 +1031,21 @@ def batch_run_cmd(
 
     async def _execute_batch() -> int:
         setup_duckdb_logging(db_path=db_path)
+        rotations = INTERNATIONAL_ROTATIONS
+        if region.upper() in ("US", "USA", "ESTADOS UNIDOS"):
+            rotations = [r for r in INTERNATIONAL_ROTATIONS if r["location"] == "United States"]
+        elif region.upper() in ("UK", "GB"):
+            rotations = [r for r in INTERNATIONAL_ROTATIONS if r["location"] == "United Kingdom"]
+        elif region.upper() in ("EU", "UE"):
+            rotations = [r for r in INTERNATIONAL_ROTATIONS if r["location"] == "European Union"]
+
         console.print(
             Panel(
-                f"[bold cyan]Starting Multi-Query International Batch Execution[/]\n"
+                f"[bold cyan]Starting Multi-Query Batch Execution ({region.upper()})[/]\n"
                 f"Cycles: [bold]{cycles}[/] | Target per Cycle: [bold]{limit_per_cycle}[/] "
                 f"| Total Potential Jobs: [bold]{cycles * limit_per_cycle}[/]\n"
                 f"Mode: [bold]{'DRY-RUN' if dry_run else 'PRODUCTION REAL'}[/] | Auto-Apply: [bold]{apply}[/]",
-                title="[bold green]1000 International Jobs Runner (US/UK/EU)[/]",
+                title=f"[bold green]Batch Jobs Runner ({region.upper()})[/]",
                 border_style="cyan",
             )
         )
@@ -1052,7 +1065,7 @@ def batch_run_cmd(
         truncator = TextTruncator()
 
         for cycle_idx in range(cycles):
-            rot = INTERNATIONAL_ROTATIONS[cycle_idx % len(INTERNATIONAL_ROTATIONS)]
+            rot = rotations[cycle_idx % len(rotations)]
             kw = rot["keywords"]
             loc = rot["location"]
             console.rule(f"[bold magenta]Cycle {cycle_idx + 1}/{cycles}: {kw} ({loc})[/]")

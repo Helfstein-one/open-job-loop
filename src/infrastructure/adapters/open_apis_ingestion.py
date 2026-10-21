@@ -321,19 +321,10 @@ class HybridJobClient(JobIngestionPort):
                         all_jobs.append(j)
                 logger.info("HybridClient: LinkedIn returned %d jobs", len(li_jobs))
             except Exception as e:
-                err_msg = str(e).lower()
-                if any(
-                    x in err_msg
-                    for x in ["auth", "login", "barrier", "blocker", "stale", "checkpoint"]
-                ):
-                    logger.warning(
-                        "🚨 LinkedIn anti-bot / auth checkpoint triggered (%s). Isolando LinkedIn e continuando com Open APIs.",
-                        e,
-                    )
-                    self._linkedin_blocked = True
-                else:
-                    logger.warning(
-                        "HybridClient: LinkedIn query failed (%s). Continuando com Open APIs.", e
-                    )
+                logger.warning(
+                    "🚨 LinkedIn MCP query failed (%s). Isolando LinkedIn e continuando com Open APIs.",
+                    e,
+                )
+                self._linkedin_blocked = True
 
         return all_jobs[:limit]
