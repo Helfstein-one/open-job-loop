@@ -1063,6 +1063,7 @@ def batch_run_cmd(
         total_shortlisted = 0
         total_applied = 0
         truncator = TextTruncator()
+        linkedin_disabled = False
 
         for cycle_idx in range(cycles):
             rot = rotations[cycle_idx % len(rotations)]
@@ -1080,7 +1081,7 @@ def batch_run_cmd(
                 timeout=30.0,
             )
 
-            if source == "open":
+            if source == "open" or (source == "hybrid" and linkedin_disabled):
                 ingestion_client: BaseJobIngestionClient = OpenApisJobClient(
                     keywords=kw, location=loc
                 )
@@ -1139,6 +1140,11 @@ def batch_run_cmd(
                     f"[yellow]Duplicates:[/] {metrics.get('duplicates', 0)} | "
                     f"[bold cyan]Shortlisted:[/] {cycle_shortlisted}"
                 )
+                if (
+                    isinstance(ingestion_client, HybridJobClient)
+                    and ingestion_client._linkedin_blocked
+                ):
+                    linkedin_disabled = True
             finally:
                 await ingestion_client.disconnect()
                 await evaluator.close()
